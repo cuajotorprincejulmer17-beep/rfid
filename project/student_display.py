@@ -96,6 +96,7 @@ class StudentDisplay(QWidget):
         self.state = "idle"          # idle | granted | warning | denied
         self.name = self.action = self.role = ""
         self.message = ""
+        self.result = ""
         self.t0 = time.monotonic()
         self.state_start = self.t0
         self.timeout_until = 0.0
@@ -211,6 +212,7 @@ class StudentDisplay(QWidget):
 
     def on_event(self, event):
         self.timeout_until = 0.0
+        self.result = event.get("result", "")
         self.set_state(event.get("status", "idle"), event.get("name", ""), event.get("action", ""),
                        event.get("role", ""), event.get("message", ""))
 
@@ -521,7 +523,29 @@ class StudentDisplay(QWidget):
         a, dy = reveal(0.30)
         self.text(p, self.name or fallback, cx, cy + 222 * s, 46 * s, P["text"], True, 0, a, w * 0.9, dy)
 
+        # Overstay alert badge for visitors who exceeded their time limit
+        a_badge, dy_badge = reveal(0.36)
+        has_overstay_badge = False
+        if self.result == "OVERSTAY" and self.role == "visitor":
+            has_overstay_badge = True
+            badge_text = "⚠ OVERSTAY"
+            badge_font = QFont()
+            badge_font.setFamilies(FONTS)
+            badge_font.setPixelSize(int(16 * s))
+            badge_font.setBold(True)
+            badge_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.5)
+            badge_width = QFontMetrics(badge_font).horizontalAdvance(badge_text) + 36 * s
+            badge_rect = QRectF(cx - badge_width / 2, cy + 262 * s + dy_badge, badge_width, 30 * s)
+            p.setPen(QPen(C(P["red"].name(), 0.8 * a_badge), 1.5))
+            p.setBrush(C(P["red"].name(), 0.18 * a_badge))
+            p.drawRoundedRect(badge_rect, 15 * s, 15 * s)
+            p.setPen(P["red"])
+            p.setFont(badge_font)
+            p.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, badge_text)
+
         a, dy = reveal(0.42)
+        # Shift role chip down if overstay badge is shown to avoid overlap
+        role_y_offset = 42 if has_overstay_badge else 0
         if self.role:
             label = self.role.upper()
             font = QFont()
@@ -530,13 +554,15 @@ class StudentDisplay(QWidget):
             font.setBold(True)
             font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.0)
             width = QFontMetrics(font).horizontalAdvance(label) + 44 * s
-            chip = QRectF(cx - width / 2, cy + 262 * s + dy, width, 32 * s)
+            chip = QRectF(cx - width / 2, cy + 262 * s + dy + role_y_offset, width, 32 * s)
             p.setPen(QPen(C(color.name(), 0.7 * a), 1.4))
             p.setBrush(C(color.name(), 0.16 * a))
             p.drawRoundedRect(chip, 16 * s, 16 * s)
             self.text(p, label, cx, chip.center().y(), 14 * s, color, True, 2.0, a)
         a, dy = reveal(0.54)
-        self.text(p, self.message, cx, cy + 326 * s, 19 * s, P["muted"], False, 0.2, a, w * 0.85, dy)
+        # Shift message down if overstay badge is shown
+        message_y_offset = 42 if has_overstay_badge else 0
+        self.text(p, self.message, cx, cy + 326 * s + message_y_offset, 19 * s, P["muted"], False, 0.2, a, w * 0.85, dy)
 
         # countdown bar back to the idle screen
         bar_w = min(w * 0.4, 420 * s)

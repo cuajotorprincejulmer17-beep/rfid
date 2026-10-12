@@ -229,8 +229,13 @@ class DataTable:
                            fg_color=t["accent"], hover_color=t["accent_hover"],
                            command=self.update_delete_button)\
             .grid(row=row, column=0, sticky="w", padx=(8, 0), pady=8)
-        values = (uid, user["name"], user["role"].title(),
-                  "Temporary" if user["is_temp"] else "Permanent", user["registered_at"])
+        if user.get("is_expired"):
+            card_type = "Expired"
+        elif user["is_temp"]:
+            card_type = "Temporary"
+        else:
+            card_type = "Permanent"
+        values = (uid, user["name"], user["role"].title(), card_type, user["registered_at"])
         for column, value in enumerate(values, start=1):
             color = t["cyan"] if column == 1 else t["text"]
             if column == 3:
@@ -795,6 +800,22 @@ class RfidApp(ctk.CTk):
                                fg_color=t["accent"], hover_color=t["accent_hover"],
                                text_color=t["text"], font=ctk.CTkFont(size=11))\
                 .pack(side="left", padx=(0, 18))
+            self.glow_border(choices)
+
+        # Bind role change to show/hide time-limit field
+        self.role_var.trace_add("write", lambda *_args: self._on_role_change())
+
+        # Visitor time-limit row (hidden by default)
+        self.time_limit_frame = ctk.CTkFrame(fields, fg_color="transparent")
+        self.time_limit_frame.grid(row=2, column=0, columnspan=4, sticky="w", pady=(10, 0))
+        self.field_label(self.time_limit_frame, "Time Limit").pack(side="left", padx=(0, 8))
+        self.time_limit_input = self.entry(self.time_limit_frame, "e.g. 30, 60, 120", height=36, width=110)
+        self.time_limit_input.pack(side="left", padx=(0, 6))
+        self.time_limit_unit = self.menu(self.time_limit_frame, ["minutes", "hours"],
+                                         tk.StringVar(value="minutes"),
+                                         command=lambda _v: None, width=84)
+        self.time_limit_unit.pack(side="left")
+        self.time_limit_frame.grid_remove()
 
         actions = ctk.CTkFrame(panel, fg_color="transparent")
         actions.grid(row=3, column=0, sticky="ew", padx=21, pady=(0, 16))
@@ -821,6 +842,15 @@ class RfidApp(ctk.CTk):
         self.name_entry.delete(0, "end")
         self.role_var.set("student")
         self.capture_status.configure(text="", text_color=self.t["muted"])
+        if hasattr(self, "time_limit_input"):
+            self.time_limit_input.delete(0, "end")
+        if hasattr(self, "time_limit_frame"):
+            self.time_limit_frame.grid_remove()
+            self.time_limit_unit.configure(values=["minutes", "hours"])
+            try:
+                self.time_limit_unit.set("minutes")
+            except Exception:
+                pass
 
     def fill_recent_registered(self):
         if not hasattr(self, "recent_reg_box"):
@@ -1039,6 +1069,15 @@ class RfidApp(ctk.CTk):
         elif item == "Dashboard":
             self.refresh_all()
 
+    # ---- Visitor time-limit toggle -------------------------------------------------------
+    def _on_role_change(self):
+        if not hasattr(self, "time_limit_frame"):
+            return
+        if self.role_var.get() == "visitor":
+            self.time_limit_frame.grid()
+        else:
+            self.time_limit_frame.grid_remove()
+
     # ---- server ----------------------------------------------------------------------------
     def api(self, method, path, body=None):
         try:
@@ -1113,14 +1152,24 @@ class RfidApp(ctk.CTk):
         if not uid or not name:
             messagebox.showwarning("Missing information", "Capture or enter a card UID and enter a name.", parent=self)
             return
-        data = self.api("POST", "/users", {"uid": uid, "name": name, "role": self.role_var.get()})
+        body = {"uid": uid, "name": name, "role": self.role_var.get()}
+        # Add time limit for visitor cards
+        if self.role_var.get() == "visitor":
+            limit_text = self.time_limit_input.get().strip() if hasattr(self, "time_limit_input") else ""
+            if limit_text:
+                try:
+                    val = int(limit_text)
+                    unit = self.time_limit_unit.get() if hasattr(self, "time_limit_unit") else "minutes"
+                    body["time_limit_minutes"] = val if unit == "minutes" else val * 60
+                except ValueError:
+                    messagebox.showwarning("Invalid time limit", "Please enter a valid number for the time limit.", parent=self)
+                    return
+        data = self.api("POST", "/users", body)
         if data is None:
             messagebox.showerror("Server unavailable", "Could not save the card. Check that app.py is running.", parent=self)
         elif data.get("success"):
             messagebox.showinfo("Card saved", data["message"], parent=self)
-            self.uid_entry.delete(0, "end")
-            self.name_entry.delete(0, "end")
-            self.capture_status.configure(text="Card registered successfully.", text_color=self.t["green"])
+            self.clear_form()
             self.refresh_users()
         else:
             messagebox.showerror("Card not saved", data.get("message", "Please check the card details."), parent=self)

@@ -33,7 +33,13 @@ def tap():
     mode = "OUT" if time.monotonic() < timeout_armed["until"] else "IN"
     timeout_armed["until"] = 0.0
 
-    code, user = db.record_tap(uid, mode, VISITOR_LIMIT_HOURS)
+    # Pass per-card time limit if available; otherwise fall back to global limit
+    card_limit = db.get_visitor_time_limit_minutes(uid)
+    if card_limit is not None:
+        limit_hours = card_limit / 60.0
+    else:
+        limit_hours = VISITOR_LIMIT_HOURS
+    code, user = db.record_tap(uid, mode, limit_hours)
     name = user["name"] if user else ""
     role = user["role"] if user else ""
 
@@ -47,6 +53,11 @@ def tap():
         status, action, message = "denied", "", "Visit limit exceeded. Please see staff."
     elif code == "REJECT_NO_OPEN_RECORD":
         status, action, message = "denied", "", "No time in on record. Please see staff."
+    elif code == "REJECT_EXPIRED_VISITOR":
+        status, action, message = "denied", "", "Visitor card already used. Please register it for a new visitor."
+        name, role = "", ""
+    elif code == "OVERSTAY":
+        status, action, message = "warning", "OUT", "Visitor card has overstayed. Please register a new card."
     else:
         status, action, message = "denied", "", "Card not registered. Please see staff."
         name, role = "", ""
@@ -89,18 +100,33 @@ def users_create():
     uid = str(data.get("uid", "")).strip().upper()
     name = str(data.get("name", "")).strip()
     role = str(data.get("role", "")).strip().lower()
+    time_limit_minutes = data.get("time_limit_minutes")
 
     if not uid or not name or role not in ("student", "visitor"):
         return jsonify({"success": False, "message": "Missing or invalid fields"})
 
+    if time_limit_minutes is not None:
+        try:
+            time_limit_minutes = int(time_limit_minutes)
+            if time_limit_minutes < 1:
+                return jsonify({"success": False, "message": "Time limit must be at least 1 minute"})
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "message": "Invalid time limit"})
+
     existing = db.uid_exists(uid)
     if existing:
         if existing["is_temp"]:
-            db.upgrade_temp_user(uid, name, role)
+            db.upgrade_temp_user(uid, name, role, time_limit_minutes)
             return jsonify({"success": True, "message": f"{name} registered ({role}) - temp card upgraded"})
-        return jsonify({"success": False, "message": "This card is already registered"})
+        # Visitor cards are always reusable: archive the old holder's record
+        # (kept in history) and give the card to the new visitor.
+        if existing["role"] == "visitor":
+            if db.re_register_visitor_card(uid, name, role, time_limit_minutes):
+                return jsonify({"success": True, "message": f"{name} registered as {role} - card reused"})
+            return jsonify({"success": False, "message": "Could not re-register this card"})
+        return jsonify({"success": False, "message": "Student cards are permanent. Delete this card first to reuse it."})
 
-    db.add_user(uid, name, role)
+    db.add_user(uid, name, role, time_limit_minutes=time_limit_minutes)
     return jsonify({"success": True, "message": f"{name} registered as {role}"})
 
 @app.route("/users/<uid>", methods=["DELETE"])

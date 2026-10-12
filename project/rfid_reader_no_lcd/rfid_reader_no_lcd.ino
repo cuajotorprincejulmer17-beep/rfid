@@ -4,9 +4,9 @@
 #include <SPI.h>
 #include <MFRC522.h>
 
-const char* WIFI_SSID  = "YOUR_WIFI_SSID";
-const char* WIFI_PASS  = "YOUR_WIFI_PASSWORD";
-const char* SERVER_URL = "http://192.168.1.50:5001/tap";
+const char* WIFI_SSID  = "ZZZ";
+const char* WIFI_PASS  = "12345678";
+const char* SERVER_URL = "http://192.168.10.64:5001/tap";
 
 #define SS_PIN  5
 
