@@ -7,16 +7,21 @@
 #include <LiquidCrystal_I2C.h>
 
 
-const char* WIFI_SSID  = "YOUR_WIFI_SSID";          // <-- put your WiFi name (2.4 GHz only!)
-const char* WIFI_PASS  = "YOUR_WIFI_PASSWORD";       // <-- put your WiFi password
-const char* SERVER_URL = "http://192.168.1.50:5001/tap";  // PC IPv4 on the current network
+const char* WIFI_SSID  = "ZZZ";          // <-- put your WiFi name (2.4 GHz only!)
+const char* WIFI_PASS  = "12345678";       // <-- put your WiFi password
+const char* SERVER_URL = "http://192.168.56.64:5001/tap";  // PC IPv4 on the current network
 
 #define SS_PIN  5
 #define I2C_SDA 21
 #define I2C_SCL 22
 
+// 16x2 LCD with I2C backpack (PCF8574)
+#define LCD_ADDR 0x27   // if LCD stays blank, try 0x3F instead of 0x27
+#define LCD_COLS 16
+#define LCD_ROWS 2
+
 MFRC522 rfid(SS_PIN, MFRC522::UNUSED_PIN);
-LiquidCrystal_I2C lcd(0x27, 16, 2);   // if LCD stays blank, try 0x3F instead of 0x27
+LiquidCrystal_I2C lcd(LCD_ADDR, LCD_COLS, LCD_ROWS);
 
 String uidToHex(MFRC522& reader) {
   String uid = "";
@@ -28,10 +33,16 @@ String uidToHex(MFRC522& reader) {
   return uid;
 }
 
+// Cut to 16 chars and pad with spaces so old text is overwritten (no clear() flicker).
+String fitLine(String text) {
+  text = text.substring(0, LCD_COLS);
+  while (text.length() < LCD_COLS) text += " ";
+  return text;
+}
+
 void lcdMessage(String line1, String line2) {
-  lcd.clear();
-  lcd.setCursor(0, 0); lcd.print(line1.substring(0, 16));
-  lcd.setCursor(0, 1); lcd.print(line2.substring(0, 16));
+  lcd.setCursor(0, 0); lcd.print(fitLine(line1));
+  lcd.setCursor(0, 1); lcd.print(fitLine(line2));
 }
 
 void connectWiFi() {
@@ -84,11 +95,12 @@ void loop() {
       Serial.println("Server result: " + status + " / " + result + " / " + action);
       if (status == "granted")      lcdMessage(name, action + " - OK");
       else if (status == "warning") lcdMessage("ALREADY IN", "Press TIME OUT");
-      else if (result == "VISIT_LIMIT_EXCEEDED") lcdMessage("VISIT LIMIT", "See attendance staff");
-      else if (result == "REJECT_NO_OPEN_RECORD") lcdMessage("NO CHECK-IN", "See attendance staff");
+      else if (result == "VISIT_LIMIT_EXCEEDED") lcdMessage("VISIT LIMIT", "See staff");
+      else if (result == "REJECT_NO_OPEN_RECORD") lcdMessage("NO CHECK-IN", "See staff");
       else                          lcdMessage("ACCESS DENIED", "Not registered");
     } else {
       Serial.println("Invalid server JSON: " + String(error.c_str()));
+      lcdMessage("SERVER ERROR", "Bad reply");
     }
   } else {
     Serial.println("HTTP error: " + String(httpCode));
