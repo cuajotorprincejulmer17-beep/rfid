@@ -175,9 +175,14 @@ def open_log_exists(user_id):
 
 
 def record_tap(uid, mode, limit_hours=None):
-    """Apply one tap atomically and return its result code and user row.
+    """Apply one tap atomically.
 
-    limit_hours may be None when the card has its own time_limit_minutes.
+    Returns ``(result_code, user_row, log_id)`` after the transaction commits.
+    ``log_id`` is the exact attendance log created or affected by the tap, or
+    ``None`` when no attendance log was involved.  Callers can safely use it
+    for post-commit work without guessing which log is newest.
+
+    ``limit_hours`` may be None when the card has its own time_limit_minutes.
     """
     conn = get_conn()
     try:
@@ -185,12 +190,12 @@ def record_tap(uid, mode, limit_hours=None):
         user = conn.execute("SELECT * FROM users WHERE rfid_uid = ?", (uid,)).fetchone()
         if user is None:
             conn.execute("COMMIT")
-            return "DENY_UNKNOWN", None
+            return "DENY_UNKNOWN", None, None
 
         # Reject expired visitor cards from time in
         if user["is_expired"] and user["role"] == "visitor" and mode == "IN":
             conn.execute("COMMIT")
-            return "REJECT_EXPIRED_VISITOR", user
+            return "REJECT_EXPIRED_VISITOR", user, None
 
         now = school_now()
         now_text = now.strftime("%Y-%m-%d %H:%M:%S")
@@ -207,6 +212,7 @@ def record_tap(uid, mode, limit_hours=None):
             WHERE user_id = ? AND time_out IS NULL
               AND (flag IS NULL OR flag = 'OVERSTAY')
         """, (user["id"],)).fetchone()
+        log_id = None
 
         if mode == "OUT":
             if open_record is None:
@@ -216,12 +222,13 @@ def record_tap(uid, mode, limit_hours=None):
                 )
                 result = "REJECT_NO_OPEN_RECORD"
             else:
+                log_id = open_record["id"]
                 flag = open_record["flag"]
                 if open_record["expected_out"] and now_text > open_record["expected_out"]:
                     flag = "OVERSTAY"
-                    result = "OVERSTAY"
-                else:
-                    result = "TIME_OUT_OK"
+                # A checkout succeeds even when the completed visit is
+                # flagged for overstay.  The flag remains available in logs.
+                result = "TIME_OUT_OK"
                 conn.execute("UPDATE logs SET time_out = ?, flag = ? WHERE id = ?",
                              (now_text, flag, open_record["id"]))
                 # Expire visitor cards after a complete visit so they cannot time in again
@@ -235,20 +242,22 @@ def record_tap(uid, mode, limit_hours=None):
                     expected_out = (now + timedelta(minutes=user["time_limit_minutes"])).strftime("%Y-%m-%d %H:%M:%S")
                 elif limit_hours is not None:
                     expected_out = (now + timedelta(hours=limit_hours)).strftime("%Y-%m-%d %H:%M:%S")
-            conn.execute(
+            log_id = conn.execute(
                 "INSERT INTO logs (user_id, time_in, expected_out) VALUES (?, ?, ?)",
                 (user["id"], now_text, expected_out),
-            )
+            ).lastrowid
             result = "TIME_IN_OK"
         elif open_record["expected_out"] and now_text > open_record["expected_out"]:
+            log_id = open_record["id"]
             conn.execute("UPDATE logs SET flag = 'OVERSTAY' WHERE id = ?",
                          (open_record["id"],))
             result = "VISIT_LIMIT_EXCEEDED"
         else:
+            log_id = open_record["id"]
             result = "ALREADY_CHECKED_IN"
 
         conn.execute("COMMIT")
-        return result, user
+        return result, user, log_id
     except Exception:
         conn.execute("ROLLBACK")
         raise

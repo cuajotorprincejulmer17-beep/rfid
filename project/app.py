@@ -2,6 +2,7 @@ import time
 
 from flask import Flask, request, jsonify
 import database as db
+from api import init_api, notify_after_tap, purge_user_data
 
 app = Flask(__name__)
 
@@ -39,7 +40,10 @@ def tap():
         limit_hours = card_limit / 60.0
     else:
         limit_hours = VISITOR_LIMIT_HOURS
-    code, user = db.record_tap(uid, mode, limit_hours)
+    code, user, log_id = db.record_tap(uid, mode, limit_hours)
+    # Queued after the committed tap; never blocks or raises.  ``log_id``
+    # identifies the exact record rather than relying on the newest log.
+    notify_after_tap(code, user, log_id)
     name = user["name"] if user else ""
     role = user["role"] if user else ""
 
@@ -131,7 +135,10 @@ def users_create():
 
 @app.route("/users/<uid>", methods=["DELETE"])
 def users_delete(uid):
+    existing = db.uid_exists(uid.upper())
     db.delete_user(uid.upper())
+    if existing:
+        purge_user_data(existing["id"])  # remove mobile accounts/tokens/notifications for this user
     return jsonify({"success": True})
 
 @app.route("/logs", methods=["GET"])
@@ -142,6 +149,9 @@ def logs_route():
 @app.route("/today-count", methods=["GET"])
 def today_count_route():
     return jsonify({"count": db.count_today()})
+
+
+init_api(app)  # registers /api/v1 and creates the additive mobile tables
 
 
 if __name__ == "__main__":

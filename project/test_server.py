@@ -16,6 +16,8 @@ from unittest.mock import patch
 
 import app as attendance_app
 import database as db
+from api import push
+from api.schema import init_api_schema
 
 
 def post(server, path, payload):
@@ -40,6 +42,10 @@ class AttendanceApiTests(unittest.TestCase):
         self.previous_db_name = db.DB_NAME
         db.DB_NAME = os.path.join(self.temp_dir.name, "test.db")
         db.init_db()
+        # app.py normally creates the mobile tables at startup.  This suite
+        # swaps in an isolated SQLite file, so initialize the same additive
+        # schema before exercising routes that enqueue notifications.
+        init_api_schema()
         attendance_app.app.config["TESTING"] = True
         attendance_app.timeout_armed["until"] = 0.0
         attendance_app.last_tap.update(uid=None, count=0)
@@ -50,8 +56,14 @@ class AttendanceApiTests(unittest.TestCase):
         self.client = attendance_app.app.test_client()
 
     def tearDown(self):
-        db.DB_NAME = self.previous_db_name
-        self.temp_dir.cleanup()
+        # /tap queues post-commit notification work.  Wait while DB_NAME still
+        # points to this test's temporary SQLite file, otherwise Windows can
+        # reject TemporaryDirectory cleanup because the worker has it open.
+        try:
+            self.assertTrue(push.drain(timeout=5), "notification worker did not finish")
+        finally:
+            db.DB_NAME = self.previous_db_name
+            self.temp_dir.cleanup()
 
     def add_user(self, uid="A1B2C3D4", name="Test Student", role="student"):
         response = self.client.post("/users", json={"uid": uid, "name": name, "role": role})
