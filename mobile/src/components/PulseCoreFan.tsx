@@ -5,14 +5,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { goTo } from '../navigation/goTo';
 import { useOverlay } from '../navigation/OverlayContext';
-import { BAR_H, CORE_ITEMS, ITEM_W, coreCenterFromBottom, fanPositions } from '../navigation/pulseCore';
+import { BTN, CORE_ITEMS, ITEM_W, coreCenterFromBottom, fanPositions } from '../navigation/pulseCore';
 import { useTheme } from '../theme/ThemeProvider';
 import { radius } from '../theme/tokens';
 import { AppText } from './AppText';
+import { PulseButton } from './PulseButton';
 
 /** Quick-action arc above the Pulse Core button. Leaves the button itself tappable (it becomes Close). */
 export function PulseCoreFan() {
-  const { overlay, close, openMore } = useOverlay();
+  const { overlay, close, openMore, toggleCore } = useOverlay();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
@@ -32,11 +33,10 @@ export function PulseCoreFan() {
 
   if (!mounted) return null;
   const pos = fanPositions(CORE_ITEMS.length, Math.min(140, width / 2 - ITEM_W / 2 - 8));
-  const barTop = BAR_H + insets.bottom;
 
   return (
     <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-      <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: barTop, opacity: p }}>
+      <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: p }}>
         <Pressable
           accessibilityLabel="Dismiss quick actions"
           accessibilityRole="button"
@@ -76,6 +76,9 @@ export function PulseCoreFan() {
             </Pressable>
           </Animated.View>
         ))}
+      </View>
+      <View style={{ position: 'absolute', alignSelf: 'center', bottom: coreCenterFromBottom(insets.bottom) - BTN / 2 }}>
+        <PulseButton closing onPress={toggleCore} />
       </View>
     </View>
   );

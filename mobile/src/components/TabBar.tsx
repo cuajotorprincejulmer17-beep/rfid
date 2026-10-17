@@ -3,13 +3,13 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BAR_H, BTN, BTN_TOP } from '../navigation/pulseCore';
+import { BAR_H, BTN } from '../navigation/pulseCore';
 import { useOverlay } from '../navigation/OverlayContext';
 import type { TabName } from '../navigation/types';
 import { useTheme } from '../theme/ThemeProvider';
 import { minTouch, radius, spacing } from '../theme/tokens';
 import { AppText } from './AppText';
-import { PulseButton } from './PulseButton';
+import { PulseDock } from './PulseDock';
 
 type Icon = keyof typeof Ionicons.glyphMap;
 const TAB_ICON: Record<TabName, [Icon, Icon]> = {
@@ -63,9 +63,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           </View>
         </Pressable>
       </View>
-      <View style={{ position: 'absolute', top: BTN_TOP, alignSelf: 'center' }}>
-        <PulseButton closing={overlay === 'core'} onPress={toggleCore} />
-      </View>
+      <PulseDock closing={overlay === 'core'} onPress={toggleCore} />
     </View>
   );
 }

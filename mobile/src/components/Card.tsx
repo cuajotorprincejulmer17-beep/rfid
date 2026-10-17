@@ -8,6 +8,8 @@ type CardVariant = 'card' | 'feature' | 'panel' | 'row';
 interface Props extends ViewProps {
   /** Semantic silhouette for content surfaces. Compact controls use Button/Badge instead. */
   variant?: CardVariant;
+  /** Compatibility shorthand for the prominent dashboard surface. */
+  featured?: boolean;
 }
 
 const cardRadius: Record<CardVariant, number> = {
@@ -17,8 +19,9 @@ const cardRadius: Record<CardVariant, number> = {
   row: radius.lg,
 };
 
-export function Card({ variant = 'card', style, ...rest }: Props) {
+export function Card({ variant = 'card', featured = false, style, ...rest }: Props) {
   const { theme } = useTheme();
+  const silhouette = featured ? 'feature' : variant;
   return (
     <View
       {...rest}
@@ -27,7 +30,7 @@ export function Card({ variant = 'card', style, ...rest }: Props) {
           backgroundColor: theme.surface,
           borderColor: theme.border,
           borderWidth: 1,
-          borderRadius: cardRadius[variant],
+          borderRadius: cardRadius[silhouette],
           padding: spacing.lg,
           shadowColor: '#000000',
           shadowOpacity: theme.isDark ? 0.2 : 0.06,

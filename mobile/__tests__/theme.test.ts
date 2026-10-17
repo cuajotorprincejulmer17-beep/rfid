@@ -1,5 +1,13 @@
 import { contrastRatio } from '../src/theme/contrast';
+import { mix } from '../src/theme/color';
 import { palettes } from '../src/theme/tokens';
+
+describe('colour helpers', () => {
+  it('keeps both endpoints when blending violet borders', () => {
+    expect(mix('#000000', '#FFFFFF', 0)).toBe('#000000');
+    expect(mix('#000000', '#FFFFFF', 1)).toBe('#ffffff');
+  });
+});
 
 describe('theme contrast (WCAG AA, 4.5:1 for text)', () => {
   for (const p of Object.values(palettes)) {

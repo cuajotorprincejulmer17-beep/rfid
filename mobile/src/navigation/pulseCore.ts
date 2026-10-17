@@ -23,6 +23,8 @@ export const BAR_H = 64;
 export const BTN = 72;
 export const BTN_TOP = -30;
 export const ITEM_W = 76;
+/** Curved cradle diameter for the Pulse Core control in the bottom dock. */
+export const CRADLE = BTN + 24;
 /** Distance from the screen bottom to the centre of the Pulse Core button. */
 export const coreCenterFromBottom = (bottomInset: number) => BAR_H + bottomInset - (BTN_TOP + BTN / 2);
 
