@@ -51,15 +51,15 @@ export function MoreSheet() {
           </View>
         </View>
         {MENU.map((g) => (
-          <View key={g.title} style={{ gap: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xs }}>
+          <View key={g.title} style={{ gap: spacing.md, padding: spacing.lg, borderRadius: radius.panel, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, shadowColor: '#000000', shadowOpacity: theme.isDark ? 0.18 : 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: theme.isDark ? 2 : 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <View style={{ width: 30, height: 30, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
                 <Ionicons name={g.icon} size={17} color={theme.accent} />
               </View>
               <AppText variant="heading" style={{ fontSize: 18 }}>{g.title}</AppText>
               <View style={{ flex: 1, height: 1, backgroundColor: theme.primary, opacity: 0.32 }} />
             </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.lg }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.lg, paddingTop: spacing.xs }}>
               {g.tiles.map((t) => {
                 const dest = t.dest;
                 return (
@@ -75,7 +75,7 @@ export function MoreSheet() {
                     }}
                     style={({ pressed }) => ({ width: g.columns === 3 ? '33.33%' : '50%', alignItems: 'center', gap: spacing.xs, minHeight: 100, opacity: dest ? (pressed ? 0.76 : 1) : 0.48 })}
                   >
-                    <View style={{ width: 58, height: 58, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: dest ? theme.border : 'transparent' }}>
+                    <View style={{ width: 58, height: 58, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: dest ? theme.border : 'transparent', shadowColor: theme.primary, shadowOpacity: dest && theme.isDark ? 0.14 : 0, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: dest && theme.isDark ? 2 : 0 }}>
                       <Ionicons name={t.icon} size={26} color={theme.accent} />
                     </View>
                     <AppText variant="caption" style={{ fontWeight: '600', textAlign: 'center' }}>{t.label}</AppText>
@@ -87,7 +87,7 @@ export function MoreSheet() {
           </View>
         ))}
       </ScrollView>
-      <View style={{ position: 'absolute', alignSelf: 'center', bottom: insets.bottom + spacing.lg }}>
+      <View style={{ position: 'absolute', alignSelf: 'center', bottom: insets.bottom + spacing.lg, width: 112, height: 86, alignItems: 'center', justifyContent: 'flex-end', borderRadius: radius.panel, backgroundColor: theme.bg, borderTopWidth: 1, borderTopColor: theme.border }}>
         <PulseButton closing onPress={close} />
       </View>
     </Animated.View>

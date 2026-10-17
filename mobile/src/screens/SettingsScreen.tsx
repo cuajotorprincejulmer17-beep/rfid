@@ -33,7 +33,7 @@ export function SettingsScreen() {
               onPress={() => setPreference(o.value)}
               style={{
                 minHeight: minTouch, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                paddingHorizontal: spacing.lg, borderRadius: radius.md, backgroundColor: theme.surface,
+                paddingHorizontal: spacing.lg, borderRadius: radius.card, backgroundColor: theme.surface,
                 borderWidth: selected ? 2 : 1, borderColor: selected ? theme.accent : theme.border,
               }}
             >

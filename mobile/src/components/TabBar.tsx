@@ -7,7 +7,7 @@ import { BAR_H, BTN, BTN_TOP } from '../navigation/pulseCore';
 import { useOverlay } from '../navigation/OverlayContext';
 import type { TabName } from '../navigation/types';
 import { useTheme } from '../theme/ThemeProvider';
-import { minTouch, radius } from '../theme/tokens';
+import { minTouch, radius, spacing } from '../theme/tokens';
 import { AppText } from './AppText';
 import { PulseButton } from './PulseButton';
 
@@ -34,12 +34,12 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         accessibilityLabel={name}
         accessibilityState={{ selected: focused }}
         onPress={() => navigation.navigate(name)}
-        style={{ flex: 1, minHeight: minTouch, alignItems: 'center', justifyContent: 'center', gap: 2 }}
+        style={{ flex: 1, minHeight: minTouch, alignItems: 'center', justifyContent: 'center' }}
       >
-        <View style={{ minWidth: 34, height: 25, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: focused ? theme.surfaceAlt : 'transparent' }}>
-          <Ionicons name={TAB_ICON[name][focused ? 0 : 1]} size={21} color={color} />
+        <View style={{ minWidth: focused ? 58 : 44, height: 42, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: focused ? theme.surfaceAlt : 'transparent', borderWidth: focused ? 1 : 0, borderColor: focused ? theme.border : 'transparent', gap: 1 }}>
+          <Ionicons name={TAB_ICON[name][focused ? 0 : 1]} size={20} color={color} />
+          <AppText variant="caption" color={color} style={{ fontSize: 10 }}>{name}</AppText>
         </View>
-        <AppText variant="caption" color={color} style={{ fontSize: 11 }}>{name}</AppText>
       </Pressable>
     );
   };
@@ -55,12 +55,12 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           accessibilityRole="button"
           accessibilityLabel="More"
           onPress={openMore}
-          style={{ flex: 1, minHeight: minTouch, alignItems: 'center', justifyContent: 'center', gap: 2 }}
+          style={{ flex: 1, minHeight: minTouch, alignItems: 'center', justifyContent: 'center' }}
         >
-          <View style={{ minWidth: 34, height: 25, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: overlay === 'more' ? theme.surfaceAlt : 'transparent' }}>
+          <View style={{ minWidth: overlay === 'more' ? 58 : 44, height: 42, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: overlay === 'more' ? theme.surfaceAlt : 'transparent', borderWidth: overlay === 'more' ? 1 : 0, borderColor: overlay === 'more' ? theme.border : 'transparent', gap: 1 }}>
             <Ionicons name="ellipsis-horizontal" size={21} color={overlay === 'more' ? theme.accent : theme.textMuted} />
+            <AppText variant="caption" color={overlay === 'more' ? theme.accent : theme.textMuted} style={{ fontSize: 10 }}>More</AppText>
           </View>
-          <AppText variant="caption" color={overlay === 'more' ? theme.accent : theme.textMuted} style={{ fontSize: 11 }}>More</AppText>
         </Pressable>
       </View>
       <View style={{ position: 'absolute', top: BTN_TOP, alignSelf: 'center' }}>

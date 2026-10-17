@@ -48,7 +48,6 @@ export const MENU: MenuGroup[] = [
     title: 'Personal', icon: 'person-outline', columns: 2,
     tiles: [
       { label: 'Profile', icon: 'person-circle-outline', reason: 'Coming soon' },
-      { label: 'Appearance', icon: 'color-palette-outline', dest: { stack: 'Settings' } },
       { label: 'Settings', icon: 'settings-outline', dest: { stack: 'Settings' } },
       { label: 'Help & Support', icon: 'help-circle-outline', reason: 'Coming soon' },
     ],

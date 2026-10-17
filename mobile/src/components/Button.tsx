@@ -24,12 +24,17 @@ export function Button({ label, onPress, variant = 'primary', disabled }: Props)
       style={({ pressed }) => ({
         minHeight: minTouch,
         paddingHorizontal: spacing.xl,
-        borderRadius: radius.md,
+        borderRadius: radius.pill,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: primary ? theme.primary : theme.surfaceAlt,
-        borderWidth: primary ? 0 : 1,
-        borderColor: theme.border,
+        borderWidth: 1,
+        borderColor: primary ? theme.primary : theme.border,
+        shadowColor: primary ? theme.primary : '#000000',
+        shadowOpacity: primary && theme.isDark ? 0.34 : 0.08,
+        shadowRadius: primary ? 10 : 6,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: primary ? 4 : 1,
         opacity: disabled ? 0.45 : pressed ? 0.85 : 1,
       })}
     >

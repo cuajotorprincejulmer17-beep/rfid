@@ -52,7 +52,7 @@ export function HomeScreen() {
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <View style={{ width: 34, height: 34, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: theme.primary }}>
+          <View style={{ width: 34, height: 34, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: theme.primary }}>
             <Ionicons name="pulse" size={21} color={theme.accent} />
           </View>
           <View>
@@ -62,7 +62,7 @@ export function HomeScreen() {
         </View>
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           <IconBtn icon="notifications-outline" label="Updates" dest={{ stack: 'Updates' }} />
-          <IconBtn icon="person-outline" label="Profile and settings" dest={{ stack: 'Settings' }} />
+          <IconBtn icon="settings-outline" label="Settings" dest={{ stack: 'Settings' }} />
         </View>
       </View>
 
@@ -72,7 +72,7 @@ export function HomeScreen() {
       </View>
 
       <Pressable accessibilityRole="button" accessibilityLabel={`Attendance ${SAMPLE.attendancePercent} percent. Sample data.`} onPress={() => goTo({ stack: 'Attendance' })}>
-        <Card style={{ overflow: 'hidden', gap: spacing.lg, borderColor: theme.primary, borderWidth: 1.5, backgroundColor: theme.isDark ? '#151536' : theme.surface }}>
+        <Card variant="feature" style={{ overflow: 'hidden', gap: spacing.lg, borderColor: theme.primary, borderWidth: 1.5, backgroundColor: theme.isDark ? '#151536' : theme.surface }}>
           <View style={{ position: 'absolute', width: 150, height: 150, borderRadius: radius.pill, right: -42, top: -54, backgroundColor: theme.primary, opacity: theme.isDark ? 0.18 : 0.1 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <View style={{ gap: spacing.xs }}>
@@ -98,7 +98,7 @@ export function HomeScreen() {
       <SectionLabel>Today</SectionLabel>
       <View style={{ flexDirection: 'row', gap: spacing.md }}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Next class ${SAMPLE.nextClass.title} at ${SAMPLE.nextClass.time}. Sample data.`} onPress={() => goTo({ tab: 'Schedule' })} style={{ flex: 1.45 }}>
-          <Card style={{ minHeight: 142, justifyContent: 'space-between', gap: spacing.md, borderColor: theme.border }}>
+          <Card variant="panel" style={{ minHeight: 142, justifyContent: 'space-between', gap: spacing.md, borderColor: theme.border }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Ionicons name="calendar-outline" size={22} color={theme.accent} />
               <AppText variant="caption" color={theme.accent} style={{ fontWeight: '700' }}>NEXT</AppText>
@@ -111,17 +111,25 @@ export function HomeScreen() {
         </Pressable>
         <View style={{ flex: 1, gap: spacing.md }}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Tasks ${SAMPLE.tasksPending} pending. Sample data.`} onPress={() => goTo({ tab: 'Tasks' })}>
-            <Card style={{ minHeight: 65, paddingVertical: spacing.md, gap: 2 }}>
-              <Ionicons name="checkbox-outline" size={19} color={theme.accent} />
-              <AppText variant="heading" style={{ fontSize: 17 }}>{SAMPLE.tasksPending} tasks</AppText>
-              <AppText variant="caption" muted>pending</AppText>
+            <Card variant="row" style={{ minHeight: 65, paddingVertical: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View style={{ width: 32, height: 32, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
+                <Ionicons name="checkbox-outline" size={18} color={theme.accent} />
+              </View>
+              <View style={{ flex: 1, gap: 1 }}>
+                <AppText variant="heading" style={{ fontSize: 15 }}>{SAMPLE.tasksPending} tasks</AppText>
+                <AppText variant="caption" muted style={{ fontSize: 12 }}>pending</AppText>
+              </View>
             </Card>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={`Updates ${SAMPLE.announcementsNew} new. Sample data.`} onPress={() => goTo({ stack: 'Updates' })}>
-            <Card style={{ minHeight: 65, paddingVertical: spacing.md, gap: 2 }}>
-              <Ionicons name="megaphone-outline" size={19} color={theme.accent} />
-              <AppText variant="heading" style={{ fontSize: 17 }}>{SAMPLE.announcementsNew} new</AppText>
-              <AppText variant="caption" muted>updates</AppText>
+            <Card variant="row" style={{ minHeight: 65, paddingVertical: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View style={{ width: 32, height: 32, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
+                <Ionicons name="megaphone-outline" size={18} color={theme.accent} />
+              </View>
+              <View style={{ flex: 1, gap: 1 }}>
+                <AppText variant="heading" style={{ fontSize: 15 }}>{SAMPLE.announcementsNew} new</AppText>
+                <AppText variant="caption" muted style={{ fontSize: 12 }}>updates</AppText>
+              </View>
             </Card>
           </Pressable>
         </View>
@@ -131,8 +139,8 @@ export function HomeScreen() {
       <View style={{ gap: spacing.sm }}>
         {SAMPLE.recentNotes.map((n, index) => (
           <Pressable key={n.id} accessibilityRole="button" accessibilityLabel={`${n.title}, edited ${n.ago}. Sample note.`} onPress={() => goTo(index === 0 ? { stack: 'Notes' } : { stack: 'Review' })}>
-            <Card style={{ paddingVertical: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-              <View style={{ width: 38, height: 38, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
+            <Card variant="row" style={{ paddingVertical: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <View style={{ width: 38, height: 38, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: theme.border }}>
                 <Ionicons name={index === 0 ? 'document-text-outline' : 'layers-outline'} size={20} color={theme.accent} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
@@ -140,6 +148,7 @@ export function HomeScreen() {
                 <AppText variant="caption" muted numberOfLines={1}>{n.preview}</AppText>
               </View>
               <AppText variant="caption" muted>{n.ago}</AppText>
+              <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
             </Card>
           </Pressable>
         ))}

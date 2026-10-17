@@ -50,6 +50,10 @@ describe('More menu integrity', () => {
       expect(tiles.find((t) => t.label === l)?.dest).toBeUndefined();
     }
   });
+  it('does not repeat a navigation destination within the More menu', () => {
+    const destinations = tiles.flatMap((t) => t.dest ? [JSON.stringify(t.dest)] : []);
+    expect(new Set(destinations).size).toBe(destinations.length);
+  });
   function titles() {
     return MENU.map((g) => g.title);
   }

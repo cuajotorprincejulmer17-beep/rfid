@@ -3,7 +3,21 @@ import { View, ViewProps } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { radius, spacing } from '../theme/tokens';
 
-export function Card({ style, ...rest }: ViewProps) {
+type CardVariant = 'card' | 'feature' | 'panel' | 'row';
+
+interface Props extends ViewProps {
+  /** Semantic silhouette for content surfaces. Compact controls use Button/Badge instead. */
+  variant?: CardVariant;
+}
+
+const cardRadius: Record<CardVariant, number> = {
+  card: radius.card,
+  feature: radius.panel,
+  panel: radius.panel,
+  row: radius.lg,
+};
+
+export function Card({ variant = 'card', style, ...rest }: Props) {
   const { theme } = useTheme();
   return (
     <View
@@ -13,7 +27,7 @@ export function Card({ style, ...rest }: ViewProps) {
           backgroundColor: theme.surface,
           borderColor: theme.border,
           borderWidth: 1,
-          borderRadius: radius.lg,
+          borderRadius: cardRadius[variant],
           padding: spacing.lg,
           shadowColor: '#000000',
           shadowOpacity: theme.isDark ? 0.2 : 0.06,

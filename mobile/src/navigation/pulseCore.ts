@@ -22,7 +22,7 @@ export const CORE_ITEMS: CoreItem[] = [
 export const BAR_H = 64;
 export const BTN = 72;
 export const BTN_TOP = -30;
-export const ITEM_W = 72;
+export const ITEM_W = 76;
 /** Distance from the screen bottom to the centre of the Pulse Core button. */
 export const coreCenterFromBottom = (bottomInset: number) => BAR_H + bottomInset - (BTN_TOP + BTN / 2);
 

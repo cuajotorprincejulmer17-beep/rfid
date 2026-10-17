@@ -70,7 +70,9 @@ export function PulseCoreFan() {
               <View style={{ width: 56, height: 56, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.primary, shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 }}>
                 <Ionicons name={it.icon} size={24} color={theme.accent} />
               </View>
-              <AppText variant="caption" style={{ fontSize: 12, fontWeight: '600' }}>{it.label}</AppText>
+              <View style={{ maxWidth: ITEM_W, paddingHorizontal: 7, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.border }}>
+                <AppText variant="caption" numberOfLines={1} style={{ fontSize: 11, lineHeight: 14, fontWeight: '700' }}>{it.label}</AppText>
+              </View>
             </Pressable>
           </Animated.View>
         ))}
