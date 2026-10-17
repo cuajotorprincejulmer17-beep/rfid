@@ -1,0 +1,18 @@
+# Environment files can contain credentials. Keep documented templates tracked.
+.env
+.env.*
+!.env.example
+
+# Generated dependencies and Expo build/tooling output for the managed mobile app.
+mobile/node_modules/
+mobile/.expo/
+mobile/.expo-shared/
+mobile/dist/
+mobile/web-build/
+mobile/coverage/
+mobile/android/
+mobile/ios/
+mobile/*.apk
+mobile/*.aab
+mobile/*.ipa
+mobile/*.log
