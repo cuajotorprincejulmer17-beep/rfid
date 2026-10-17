@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { AppText } from '../components/AppText';
-import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { Screen } from '../components/Screen';
 import { SAMPLE } from '../mock/sample';
@@ -18,14 +17,6 @@ function greeting(d = new Date()): string {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
-function Tappable({ dest, label, children }: { dest: Dest; label: string; children: React.ReactNode }) {
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}. Sample data.`} onPress={() => goTo(dest)} style={{ flexBasis: '47%', flexGrow: 1 }}>
-      <Card style={{ gap: spacing.xs }}>{children}</Card>
-    </Pressable>
-  );
-}
-
 function IconBtn({ icon, label, dest }: { icon: Icon; label: string; dest: Dest }) {
   const { theme } = useTheme();
   return (
@@ -33,10 +24,25 @@ function IconBtn({ icon, label, dest }: { icon: Icon; label: string; dest: Dest 
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={() => goTo(dest)}
-      style={{ width: minTouch, height: minTouch, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }}
+      style={({ pressed }) => ({
+        width: minTouch, height: minTouch, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+        backgroundColor: pressed ? theme.surfaceAlt : theme.surface, borderWidth: 1, borderColor: theme.border,
+      })}
     >
-      <Ionicons name={icon} size={22} color={theme.accent} />
+      <Ionicons name={icon} size={21} color={theme.accent} />
     </Pressable>
+  );
+}
+
+function SectionLabel({ children, action, onPress }: { children: string; action?: string; onPress?: () => void }) {
+  const { theme } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <AppText variant="heading" style={{ fontSize: 18 }}>{children}</AppText>
+      {action ? <Pressable accessibilityRole="button" accessibilityLabel={action} onPress={onPress} hitSlop={8}>
+        <AppText variant="caption" color={theme.accent} style={{ fontWeight: '700' }}>{action}</AppText>
+      </Pressable> : null}
+    </View>
   );
 }
 
@@ -46,50 +52,98 @@ export function HomeScreen() {
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <Ionicons name="pulse" size={26} color={theme.accent} />
-          <AppText variant="heading" style={{ letterSpacing: 4 }}>PULSE</AppText>
+          <View style={{ width: 34, height: 34, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: theme.primary }}>
+            <Ionicons name="pulse" size={21} color={theme.accent} />
+          </View>
+          <View>
+            <AppText variant="heading" style={{ letterSpacing: 3.5, fontSize: 18 }}>PULSE</AppText>
+            <AppText variant="caption" muted style={{ fontSize: 11 }}>STUDENT SPACE</AppText>
+          </View>
         </View>
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           <IconBtn icon="notifications-outline" label="Updates" dest={{ stack: 'Updates' }} />
-          <IconBtn icon="person-outline" label="Settings" dest={{ stack: 'Settings' }} />
+          <IconBtn icon="person-outline" label="Profile and settings" dest={{ stack: 'Settings' }} />
         </View>
       </View>
-      <View>
+
+      <View style={{ gap: spacing.xs }}>
         <AppText variant="body" muted>{greeting()}</AppText>
-        <AppText variant="title">Welcome back</AppText>
+        <AppText variant="title" style={{ fontSize: 28 }}>Your day, in rhythm.</AppText>
       </View>
-      <Badge label="Prototype preview · sample data, not your records" />
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-        <Tappable dest={{ stack: 'Attendance' }} label={`Attendance ${SAMPLE.attendancePercent}%`}>
-          <Ionicons name="card-outline" size={22} color={theme.accent} />
-          <AppText variant="caption" muted>Attendance</AppText>
-          <AppText variant="heading">{SAMPLE.attendancePercent}%</AppText>
-        </Tappable>
-        <Tappable dest={{ tab: 'Schedule' }} label={`Next class ${SAMPLE.nextClass.title}`}>
-          <Ionicons name="calendar-outline" size={22} color={theme.accent} />
-          <AppText variant="caption" muted>Next class</AppText>
-          <AppText variant="heading">{SAMPLE.nextClass.title} · {SAMPLE.nextClass.time}</AppText>
-        </Tappable>
-        <Tappable dest={{ tab: 'Tasks' }} label={`Tasks ${SAMPLE.tasksPending} pending`}>
-          <Ionicons name="checkbox-outline" size={22} color={theme.accent} />
-          <AppText variant="caption" muted>Tasks</AppText>
-          <AppText variant="heading">{SAMPLE.tasksPending} pending</AppText>
-        </Tappable>
-        <Tappable dest={{ stack: 'Updates' }} label={`Announcements ${SAMPLE.announcementsNew} new`}>
-          <Ionicons name="megaphone-outline" size={22} color={theme.accent} />
-          <AppText variant="caption" muted>Announcements</AppText>
-          <AppText variant="heading">{SAMPLE.announcementsNew} new</AppText>
-        </Tappable>
-      </View>
-      <AppText variant="heading">Study Space</AppText>
-      {SAMPLE.recentNotes.map((n) => (
-        <Pressable key={n.id} accessibilityRole="button" accessibilityLabel={`${n.title}, edited ${n.ago}. Sample note.`} onPress={() => goTo({ stack: 'Notes' })}>
-          <Card>
-            <AppText style={{ fontWeight: '600' }}>{n.title}</AppText>
-            <AppText variant="caption" muted>{n.preview} · {n.ago}</AppText>
+
+      <Pressable accessibilityRole="button" accessibilityLabel={`Attendance ${SAMPLE.attendancePercent} percent. Sample data.`} onPress={() => goTo({ stack: 'Attendance' })}>
+        <Card style={{ overflow: 'hidden', gap: spacing.lg, borderColor: theme.primary, borderWidth: 1.5, backgroundColor: theme.isDark ? '#151536' : theme.surface }}>
+          <View style={{ position: 'absolute', width: 150, height: 150, borderRadius: radius.pill, right: -42, top: -54, backgroundColor: theme.primary, opacity: theme.isDark ? 0.18 : 0.1 }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ gap: spacing.xs }}>
+              <View style={{ alignSelf: 'flex-start', paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: theme.surfaceAlt }}>
+                <AppText variant="caption" color={theme.accent} style={{ fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>ATTENDANCE</AppText>
+              </View>
+              <AppText variant="body" muted>This term - sample data</AppText>
+            </View>
+            <View style={{ width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: theme.primary }}>
+              <Ionicons name="card-outline" size={25} color={theme.accent} />
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md }}>
+            <AppText style={{ color: theme.text, fontSize: 44, lineHeight: 48, fontWeight: '800', letterSpacing: -1 }}>{SAMPLE.attendancePercent}%</AppText>
+            <AppText variant="caption" muted style={{ paddingBottom: 7 }}>on track</AppText>
+          </View>
+          <View style={{ height: 6, borderRadius: radius.pill, backgroundColor: theme.surfaceAlt, overflow: 'hidden' }}>
+            <View style={{ width: `${SAMPLE.attendancePercent}%`, height: '100%', borderRadius: radius.pill, backgroundColor: theme.primary }} />
+          </View>
+        </Card>
+      </Pressable>
+
+      <SectionLabel>Today</SectionLabel>
+      <View style={{ flexDirection: 'row', gap: spacing.md }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Next class ${SAMPLE.nextClass.title} at ${SAMPLE.nextClass.time}. Sample data.`} onPress={() => goTo({ tab: 'Schedule' })} style={{ flex: 1.45 }}>
+          <Card style={{ minHeight: 142, justifyContent: 'space-between', gap: spacing.md, borderColor: theme.border }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Ionicons name="calendar-outline" size={22} color={theme.accent} />
+              <AppText variant="caption" color={theme.accent} style={{ fontWeight: '700' }}>NEXT</AppText>
+            </View>
+            <View style={{ gap: 2 }}>
+              <AppText variant="heading" style={{ fontSize: 17 }}>{SAMPLE.nextClass.title}</AppText>
+              <AppText variant="caption" muted>{SAMPLE.nextClass.time}</AppText>
+            </View>
           </Card>
         </Pressable>
-      ))}
+        <View style={{ flex: 1, gap: spacing.md }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Tasks ${SAMPLE.tasksPending} pending. Sample data.`} onPress={() => goTo({ tab: 'Tasks' })}>
+            <Card style={{ minHeight: 65, paddingVertical: spacing.md, gap: 2 }}>
+              <Ionicons name="checkbox-outline" size={19} color={theme.accent} />
+              <AppText variant="heading" style={{ fontSize: 17 }}>{SAMPLE.tasksPending} tasks</AppText>
+              <AppText variant="caption" muted>pending</AppText>
+            </Card>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Updates ${SAMPLE.announcementsNew} new. Sample data.`} onPress={() => goTo({ stack: 'Updates' })}>
+            <Card style={{ minHeight: 65, paddingVertical: spacing.md, gap: 2 }}>
+              <Ionicons name="megaphone-outline" size={19} color={theme.accent} />
+              <AppText variant="heading" style={{ fontSize: 17 }}>{SAMPLE.announcementsNew} new</AppText>
+              <AppText variant="caption" muted>updates</AppText>
+            </Card>
+          </Pressable>
+        </View>
+      </View>
+
+      <SectionLabel action="View notes" onPress={() => goTo({ stack: 'Notes' })}>Study Space</SectionLabel>
+      <View style={{ gap: spacing.sm }}>
+        {SAMPLE.recentNotes.map((n, index) => (
+          <Pressable key={n.id} accessibilityRole="button" accessibilityLabel={`${n.title}, edited ${n.ago}. Sample note.`} onPress={() => goTo(index === 0 ? { stack: 'Notes' } : { stack: 'Review' })}>
+            <Card style={{ paddingVertical: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <View style={{ width: 38, height: 38, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
+                <Ionicons name={index === 0 ? 'document-text-outline' : 'layers-outline'} size={20} color={theme.accent} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <AppText style={{ fontWeight: '700' }}>{n.title}</AppText>
+                <AppText variant="caption" muted numberOfLines={1}>{n.preview}</AppText>
+              </View>
+              <AppText variant="caption" muted>{n.ago}</AppText>
+            </Card>
+          </Pressable>
+        ))}
+      </View>
     </Screen>
   );
 }

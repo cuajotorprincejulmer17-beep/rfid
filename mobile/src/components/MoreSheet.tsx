@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Pressable, ScrollView, View } from 'react-native';
+import { Animated, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { goTo } from '../navigation/goTo';
@@ -11,26 +11,25 @@ import { radius, spacing } from '../theme/tokens';
 import { AppText } from './AppText';
 import { PulseButton } from './PulseButton';
 
-const HEIGHT = Dimensions.get('window').height;
-
 /** Full-height, scrollable overlay. Back handling lives in OverlayProvider (closes this first). */
 export function MoreSheet() {
   const { overlay, close } = useOverlay();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
-  const y = useRef(new Animated.Value(HEIGHT)).current;
+  const { height } = useWindowDimensions();
+  const y = useRef(new Animated.Value(height)).current;
   const [mounted, setMounted] = useState(false);
   const open = overlay === 'more';
 
   useEffect(() => {
     if (open) setMounted(true);
-    Animated.timing(y, { toValue: open ? 0 : HEIGHT, duration: reduced ? 0 : 260, useNativeDriver: true }).start(
+    Animated.timing(y, { toValue: open ? 0 : height, duration: reduced ? 0 : 260, useNativeDriver: true }).start(
       ({ finished }) => {
         if (finished && !open) setMounted(false);
       },
     );
-  }, [open, reduced, y]);
+  }, [height, open, reduced, y]);
 
   if (!mounted) return null;
 
@@ -40,15 +39,25 @@ export function MoreSheet() {
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: theme.bg, transform: [{ translateY: y }] }}
     >
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + 150, gap: spacing.lg }}
+        contentContainerStyle={{ paddingTop: insets.top + spacing.md, paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + 142, gap: spacing.lg }}
       >
-        <AppText variant="title">More</AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ gap: 2 }}>
+            <AppText variant="caption" color={theme.accent} style={{ fontWeight: '800', letterSpacing: 1.4 }}>PULSE</AppText>
+            <AppText variant="title">More</AppText>
+          </View>
+          <View style={{ width: 42, height: 42, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: theme.border }}>
+            <Ionicons name="grid-outline" size={21} color={theme.accent} />
+          </View>
+        </View>
         {MENU.map((g) => (
-          <View key={g.title} style={{ gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-              <Ionicons name={g.icon} size={22} color={theme.accent} />
-              <AppText variant="heading">{g.title}</AppText>
-              <View style={{ flex: 1, height: 1, backgroundColor: theme.primary, opacity: 0.6 }} />
+          <View key={g.title} style={{ gap: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xs }}>
+              <View style={{ width: 30, height: 30, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
+                <Ionicons name={g.icon} size={17} color={theme.accent} />
+              </View>
+              <AppText variant="heading" style={{ fontSize: 18 }}>{g.title}</AppText>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.primary, opacity: 0.32 }} />
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.lg }}>
               {g.tiles.map((t) => {
@@ -64,9 +73,9 @@ export function MoreSheet() {
                       close();
                       if (dest) goTo(dest);
                     }}
-                    style={{ width: g.columns === 3 ? '33.33%' : '50%', alignItems: 'center', gap: spacing.xs, minHeight: 96, opacity: dest ? 1 : 0.5 }}
+                    style={({ pressed }) => ({ width: g.columns === 3 ? '33.33%' : '50%', alignItems: 'center', gap: spacing.xs, minHeight: 100, opacity: dest ? (pressed ? 0.76 : 1) : 0.48 })}
                   >
-                    <View style={{ width: 56, height: 56, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
+                    <View style={{ width: 58, height: 58, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: dest ? theme.border : 'transparent' }}>
                       <Ionicons name={t.icon} size={26} color={theme.accent} />
                     </View>
                     <AppText variant="caption" style={{ fontWeight: '600', textAlign: 'center' }}>{t.label}</AppText>

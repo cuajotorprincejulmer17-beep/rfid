@@ -69,4 +69,7 @@ describe('Pulse Core fan', () => {
     const xs = fanPositions(CORE_ITEMS.length).map((p) => p.x);
     for (let i = 1; i < xs.length; i++) expect(xs[i]).toBeGreaterThan(xs[i - 1]);
   });
+  it('keeps every quick action above the Pulse Core button', () => {
+    for (const p of fanPositions(CORE_ITEMS.length)) expect(p.h).toBeGreaterThan(0);
+  });
 });

@@ -21,9 +21,9 @@ export interface Palette {
 export const palettes: Record<ThemeName, Palette> = {
   dark: {
     name: 'dark', isDark: true,
-    bg: '#0B0A14', surface: '#15131F', surfaceAlt: '#1E1B2E', border: '#2E2A47',
+    bg: '#080B17', surface: '#111526', surfaceAlt: '#191D34', border: '#2D3150',
     text: '#F4F2FF', textMuted: '#B4AFD0',
-    primary: '#7C3AED', onPrimary: '#FFFFFF', accent: '#A78BFA',
+    primary: '#7C3AED', onPrimary: '#FFFFFF', accent: '#B69AFF',
     success: '#34D399', warning: '#FBBF24', danger: '#F87171',
   },
   light: {
@@ -42,13 +42,13 @@ export const palettes: Record<ThemeName, Palette> = {
   },
   midnight: {
     name: 'midnight', isDark: true,
-    bg: '#050A1A', surface: '#0D1530', surfaceAlt: '#16214A', border: '#26346B',
+    bg: '#060A18', surface: '#0D1430', surfaceAlt: '#151E42', border: '#29366F',
     text: '#EEF2FF', textMuted: '#AAB6E0',
     primary: '#7C3AED', onPrimary: '#FFFFFF', accent: '#A78BFA',
     success: '#34D399', warning: '#FBBF24', danger: '#F87171',
   },
 };
 
-export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
+export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 40 } as const;
 export const radius = { sm: 8, md: 12, lg: 16, xl: 24, pill: 999 } as const;
 export const minTouch = 48;

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { radius } from '../theme/tokens';
 import { AppText } from './AppText';
@@ -18,13 +18,15 @@ export function PulseButton({ closing, onPress }: { closing: boolean; onPress: (
       style={({ pressed }) => ({
         width: BTN, height: BTN, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
         backgroundColor: theme.surface, borderWidth: 2.5, borderColor: theme.primary,
-        opacity: pressed ? 0.85 : 1, shadowColor: theme.primary, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
+        opacity: pressed ? 0.88 : 1, shadowColor: theme.primary, shadowOpacity: theme.isDark ? 0.55 : 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 10,
       })}
     >
-      <Ionicons name={closing ? 'close' : 'pulse'} size={26} color={theme.accent} />
-      <AppText variant="caption" color={theme.accent} style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1 }}>
-        {closing ? 'CLOSE' : 'MENU'}
-      </AppText>
+      <View pointerEvents="none" style={{ width: BTN - 12, height: BTN - 12, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: theme.accent }}>
+        <Ionicons name={closing ? 'close' : 'pulse'} size={25} color={theme.accent} />
+        <AppText variant="caption" color={theme.accent} style={{ fontSize: 10, fontWeight: '800', letterSpacing: 1.1 }}>
+          {closing ? 'CLOSE' : 'MENU'}
+        </AppText>
+      </View>
     </Pressable>
   );
 }

@@ -20,14 +20,14 @@ export const CORE_ITEMS: CoreItem[] = [
 
 // Tab bar geometry shared by the bar and the fan so they line up.
 export const BAR_H = 64;
-export const BTN = 68;
-export const BTN_TOP = -26;
+export const BTN = 72;
+export const BTN_TOP = -30;
 export const ITEM_W = 72;
 /** Distance from the screen bottom to the centre of the Pulse Core button. */
 export const coreCenterFromBottom = (bottomInset: number) => BAR_H + bottomInset - (BTN_TOP + BTN / 2);
 
 /** Arc positions: x offset from the button centre, h height above it. */
-export function fanPositions(count: number, radius = 118, startDeg = 190, endDeg = -10) {
+export function fanPositions(count: number, radius = 118, startDeg = 145, endDeg = 35) {
   return Array.from({ length: count }, (_, i) => {
     const deg = count === 1 ? 90 : startDeg - (i * (startDeg - endDeg)) / (count - 1);
     const rad = (deg * Math.PI) / 180;

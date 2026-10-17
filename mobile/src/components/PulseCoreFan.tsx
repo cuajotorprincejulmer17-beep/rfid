@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, View } from 'react-native';
+import { Animated, Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { goTo } from '../navigation/goTo';
@@ -19,10 +19,11 @@ export function PulseCoreFan() {
   const p = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
   const open = overlay === 'core';
+  const { width } = useWindowDimensions();
 
   useEffect(() => {
     if (open) setMounted(true);
-    Animated.timing(p, { toValue: open ? 1 : 0, duration: reduced ? 0 : 200, useNativeDriver: true }).start(
+    Animated.timing(p, { toValue: open ? 1 : 0, duration: reduced ? 0 : 230, useNativeDriver: true }).start(
       ({ finished }) => {
         if (finished && !open) setMounted(false);
       },
@@ -30,7 +31,7 @@ export function PulseCoreFan() {
   }, [open, reduced, p]);
 
   if (!mounted) return null;
-  const pos = fanPositions(CORE_ITEMS.length);
+  const pos = fanPositions(CORE_ITEMS.length, Math.min(140, width / 2 - ITEM_W / 2 - 8));
   const barTop = BAR_H + insets.bottom;
 
   return (
@@ -47,7 +48,14 @@ export function PulseCoreFan() {
         {CORE_ITEMS.map((it, i) => (
           <Animated.View
             key={it.label}
-            style={{ position: 'absolute', left: pos[i].x - ITEM_W / 2, bottom: pos[i].h - 32, width: ITEM_W, alignItems: 'center', opacity: p, transform: [{ scale: p }] }}
+            style={{
+              position: 'absolute', left: pos[i].x - ITEM_W / 2, bottom: pos[i].h - 32, width: ITEM_W, alignItems: 'center',
+              opacity: p,
+              transform: [
+                { translateY: p.interpolate({ inputRange: [0, 1], outputRange: [18 + i * 3, 0] }) },
+                { scale: p.interpolate({ inputRange: [0, 1], outputRange: [0.84, 1] }) },
+              ],
+            }}
           >
             <Pressable
               accessibilityRole="button"
@@ -59,7 +67,7 @@ export function PulseCoreFan() {
               }}
               style={{ alignItems: 'center', gap: 4 }}
             >
-              <View style={{ width: 56, height: 56, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: theme.primary }}>
+              <View style={{ width: 56, height: 56, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.primary, shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 }}>
                 <Ionicons name={it.icon} size={24} color={theme.accent} />
               </View>
               <AppText variant="caption" style={{ fontSize: 12, fontWeight: '600' }}>{it.label}</AppText>
