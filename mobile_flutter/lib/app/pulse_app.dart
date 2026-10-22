@@ -7,8 +7,7 @@ import '../core/storage/preferences_store.dart';
 import '../core/theme/pulse_theme.dart';
 import '../core/theme/pulse_tokens.dart';
 import '../core/theme/theme_controller.dart';
-import '../navigation/destination_registry.dart';
-import 'placeholder_page.dart';
+import 'route_builders.dart';
 
 /// The Pulse app root.
 ///
@@ -23,14 +22,7 @@ class PulseApp extends ConsumerStatefulWidget {
 }
 
 class _PulseAppState extends ConsumerState<PulseApp> {
-  late final GoRouter _router = buildRouter(_routeBuilders);
-
-  /// One builder per registry id.
-  final Map<String, GoRouterWidgetBuilder> _routeBuilders =
-      <String, GoRouterWidgetBuilder>{
-    for (final d in kDestinations)
-      d.id: (context, state) => PlaceholderPage(title: d.title),
-  };
+  late final GoRouter _router = buildRouter(buildRouteBuilders());
 
   @override
   void dispose() {

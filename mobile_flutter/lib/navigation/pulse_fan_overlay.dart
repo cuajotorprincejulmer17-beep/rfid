@@ -44,7 +44,18 @@ class _PulseFanOverlayState extends ConsumerState<PulseFanOverlay>
   @override
   void initState() {
     super.initState();
-    ref.listen<PulseFanState>(pulseFanProvider, _onFanChanged);
+    // `listenManual` is the only subscription that may be created outside
+    // `build`. It is closed automatically when this element unmounts.
+    ref.listenManual<PulseFanState>(pulseFanProvider, _onFanChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final current = ref.read(pulseFanProvider);
+      if (current.phase == FanPhase.opening) {
+        _onFanChanged(const PulseFanState(), current);
+      } else if (current.phase == FanPhase.open) {
+        _controller.value = 1;
+      }
+    });
   }
 
   void _onFanChanged(PulseFanState? previous, PulseFanState next) {
@@ -235,10 +246,12 @@ class _PulseFanOverlayState extends ConsumerState<PulseFanOverlay>
       );
     }
 
+    final itemWidth =
+        mode == FanMode.column ? kFanColumnWidth : kFanItemWidth;
     return Positioned(
-      left: widget.launcherCenter.dx + position.dx - kFanItemWidth / 2,
-      top: widget.launcherCenter.dy + position.dy - kFanItemCircle / 2,
-      width: kFanItemWidth,
+      left: widget.launcherCenter.dx + position.dx - itemWidth / 2,
+      top: widget.launcherCenter.dy + position.dy - kFanItemHeight / 2,
+      width: itemWidth,
       child: Opacity(
         opacity: opacity,
         child: Transform.scale(

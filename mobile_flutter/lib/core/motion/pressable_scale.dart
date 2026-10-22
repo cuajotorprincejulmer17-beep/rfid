@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -42,8 +43,9 @@ class _PressableScaleState extends State<PressableScale>
     with SingleTickerProviderStateMixin {
   late final AnimationController _press =
       AnimationController.unbounded(vsync: this, value: 0);
-  final Stopwatch _clock = Stopwatch()..start();
-  int _lastFireMs = -1000;
+
+  /// When the target last fired, used for the single-flight lock.
+  DateTime? _lastFire;
 
   bool get _enabled => widget.onPressed != null;
 
@@ -60,9 +62,17 @@ class _PressableScaleState extends State<PressableScale>
   }
 
   void _activate() {
-    final now = _clock.elapsedMilliseconds;
-    if (!_enabled || now - _lastFireMs < PulseMotion.lockMs) return;
-    _lastFireMs = now;
+    if (!_enabled) return;
+
+    // The lock is measured against the app clock, so it behaves the same in
+    // a test as it does on a device.
+    final now = clock.now();
+    final last = _lastFire;
+    if (last != null &&
+        now.difference(last).inMilliseconds < PulseMotion.lockMs) {
+      return;
+    }
+    _lastFire = now;
     widget.onPressed!();
   }
 
@@ -96,10 +106,13 @@ class _PressableScaleState extends State<PressableScale>
             child: AnimatedBuilder(
               animation: _press,
               child: widget.child,
-              builder: (context, child) => Transform.scale(
-                scale: 1 - (1 - widget.pressedScale) * _press.value,
-                child: child,
-              ),
+              builder: (context, child) {
+                final s = 1 - (1 - widget.pressedScale) * _press.value;
+                return Transform.scale(
+                  scale: s,
+                  child: child,
+                );
+              },
             ),
           ),
         ),

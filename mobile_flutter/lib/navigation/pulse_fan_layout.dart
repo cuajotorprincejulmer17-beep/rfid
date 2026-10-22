@@ -57,7 +57,7 @@ List<Offset> fanOffsets(FanMode mode, int count) {
 const double kFanItemWidth = 72;
 
 /// The minimum height of a fan item's hit area.
-const double kFanItemHeight = 48;
+const double kFanItemHeight = 80;
 
 /// The diameter of the visible fan item circle.
 const double kFanItemCircle = 56;

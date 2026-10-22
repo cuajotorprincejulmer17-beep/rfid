@@ -89,19 +89,24 @@ class _PulseDockState extends State<PulseDock>
       ),
       child: Row(
         children: [
-          for (final destination in items)
+          // Five slots: Home, Schedule, the gap for the launcher, Tasks,
+          // Updates. The gap sits between Schedule and Tasks, so the two
+          // destinations on either side of it are symmetrical and the gap
+          // lands exactly under the launcher that floats above it.
+          for (final destination in items) ...[
             if (destination.id == 'tasks')
-              const SizedBox(width: kDockLauncherGap)
-            else
-              Expanded(child: _DockItem(
-                    destination: destination,
-                    selected: destination.id == widget.selectedId,
-                    spring: _spring,
-                    onTap: () => widget.onSelected(destination.id),
-                    badgeCount: destination.id == 'updates'
-                        ? widget.unreadCount
-                        : 0,
-                  )),
+              const SizedBox(width: kDockLauncherGap),
+            Expanded(
+              child: _DockItem(
+                destination: destination,
+                selected: destination.id == widget.selectedId,
+                spring: _spring,
+                onTap: () => widget.onSelected(destination.id),
+                badgeCount:
+                    destination.id == 'updates' ? widget.unreadCount : 0,
+              ),
+            ),
+          ],
         ],
       ),
     );
