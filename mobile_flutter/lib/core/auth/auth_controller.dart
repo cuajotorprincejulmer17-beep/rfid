@@ -20,6 +20,7 @@ class AuthController extends ChangeNotifier {
   AuthStatus _status = AuthStatus.unknown;
   AuthUser? _user;
   String? _lastErrorCode;
+  String? _lastErrorMessage;
 
   AuthStatus get status => _status;
 
@@ -27,6 +28,9 @@ class AuthController extends ChangeNotifier {
 
   /// The last backend error code, so the UI can react without matching text.
   String? get lastErrorCode => _lastErrorCode;
+
+  /// The server's message for the last failure. Safe to show.
+  String? get lastErrorMessage => _lastErrorMessage;
 
   bool get isSignedIn => _status == AuthStatus.signedIn;
 
@@ -53,6 +57,7 @@ class AuthController extends ChangeNotifier {
     required String password,
   }) async {
     _lastErrorCode = null;
+    _lastErrorMessage = null;
     notifyListeners();
     try {
       final session = await api.login(
@@ -66,6 +71,7 @@ class AuthController extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _lastErrorCode = e.code;
+      _lastErrorMessage = e.message;
       _status = AuthStatus.signedOut;
       notifyListeners();
       return false;
@@ -79,6 +85,7 @@ class AuthController extends ChangeNotifier {
     required String password,
   }) async {
     _lastErrorCode = null;
+    _lastErrorMessage = null;
     notifyListeners();
     try {
       final session = await api.claim(
@@ -93,6 +100,7 @@ class AuthController extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _lastErrorCode = e.code;
+      _lastErrorMessage = e.message;
       _status = AuthStatus.signedOut;
       notifyListeners();
       return false;

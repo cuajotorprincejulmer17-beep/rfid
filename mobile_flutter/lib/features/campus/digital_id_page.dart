@@ -21,6 +21,9 @@ class DigitalIdPage extends StatefulWidget {
     required this.studentNumber,
     this.program = 'Sample programme',
     this.section = 'Sample section',
+    this.subtitle = 'Demo card',
+    this.programLabel = 'Programme',
+    this.sectionLabel = 'Section',
     this.permissionDenied = false,
     this.onPermissionRetry,
   });
@@ -29,6 +32,11 @@ class DigitalIdPage extends StatefulWidget {
   final String studentNumber;
   final String program;
   final String section;
+
+  /// Where the card's details come from.
+  final String subtitle;
+  final String programLabel;
+  final String sectionLabel;
 
   /// Whether the feature is unavailable because a permission is missing.
   final bool permissionDenied;
@@ -82,7 +90,7 @@ class _DigitalIdPageState extends State<DigitalIdPage> {
 
     return PulsePage(
       title: 'Digital ID',
-      subtitle: 'Demo card',
+      subtitle: widget.subtitle,
       actions: [
         IconButton(
           icon: const Icon(Icons.refresh_rounded),
@@ -138,8 +146,8 @@ class _DigitalIdPageState extends State<DigitalIdPage> {
                   ],
                 ),
                 const SizedBox(height: PulseSpacing.lg),
-                _DetailRow(label: 'Programme', value: widget.program),
-                _DetailRow(label: 'Section', value: widget.section),
+                _DetailRow(label: widget.programLabel, value: widget.program),
+                _DetailRow(label: widget.sectionLabel, value: widget.section),
                 const SizedBox(height: PulseSpacing.lg),
                 Center(
                   child: RepaintBoundary(
@@ -171,7 +179,8 @@ class _DigitalIdPageState extends State<DigitalIdPage> {
               await Clipboard.setData(
                 ClipboardData(
                   text: '${widget.name} (${widget.studentNumber})\n'
-                      '${widget.program}, ${widget.section}\n'
+                      '${widget.programLabel}: ${widget.program}\n'
+                      '${widget.sectionLabel}: ${widget.section}\n'
                       'Demo code, not an official credential.',
                 ),
               );

@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from flask import g, jsonify, request
 
 import database as db
+from services import attendance
 from .common import (ApiError, bp, connect, json_body, now_text, require_auth, text_field, to_iso)
 
 PREF_KEYS = ("attendance_alerts", "announcements", "sound", "haptics")
@@ -25,11 +26,17 @@ def unread_count(c, user_id):
 
 
 def _profile(c, user_id):
-    r = c.execute("""SELECT u.name, p.student_number, p.course_section, p.phone
+    r = c.execute("""SELECT u.name, p.student_number, p.course_section, p.phone, p.section_id,
+                            s.name AS section_name, s.course, s.year_level, t.name AS term
                      FROM users u LEFT JOIN student_profiles p ON p.user_id = u.id
+                     LEFT JOIN sections s ON s.id = p.section_id LEFT JOIN terms t ON t.id = s.term_id
                      WHERE u.id = ?""", (user_id,)).fetchone()
+    section = None
+    if r["section_id"]:
+        section = {"id": r["section_id"], "name": r["section_name"], "course": r["course"],
+                   "year_level": r["year_level"], "term": r["term"]}
     return {"name": r["name"], "student_number": r["student_number"], "course_section": r["course_section"],
-            "phone": r["phone"], "rfid": {"registered": True, "status": "registered"}}
+            "phone": r["phone"], "rfid": {"registered": True, "status": "registered"}, "section": section}
 
 
 def _session_status(r, today):
@@ -70,14 +77,18 @@ def _today_str():
 
 def today_summary(c, user_id):
     today = _today_str()
-    days = build_days(_logs_between(c, user_id, date.fromisoformat(today), date.fromisoformat(today)), today)
+    day = date.fromisoformat(today)
+    cal = attendance.student_calendar(c, user_id, day, day)[0]
+    days = build_days(_logs_between(c, user_id, day, day), today)
     if not days:
         return {"date": today, "status": "pending", "state": "not_in", "expected_scan": "time_in",
-                "time_in": None, "time_out": None, "sessions": []}
+                "time_in": None, "time_out": None, "sessions": [],
+                "day_status": cal["day_status"], "late_minutes": 0}
     d = days[0]
     last = d["sessions"][-1]
     d["state"] = "in" if last["time_out"] is None and last["status"] == "pending" else "out"
     d["expected_scan"] = "time_out" if d["state"] == "in" else None
+    d["day_status"], d["late_minutes"] = cal["day_status"], cal["late_minutes"]
     return d
 
 
@@ -116,6 +127,7 @@ def me():
         out = _profile(c, g.user_id)
         out["preferences"] = get_prefs(c, g.user_id)
         out["unread_count"] = unread_count(c, g.user_id)
+        out["policy"] = attendance.policy_json(attendance.policy(c))
     return jsonify(out)
 
 
@@ -128,8 +140,20 @@ def home():
                               WHERE user_id = ? AND time_in IS NOT NULL ORDER BY id DESC LIMIT 40""",
                            (g.user_id,)).fetchall()
         out = {"profile": _profile(c, g.user_id), "today": today_summary(c, g.user_id),
-               "recent": build_days(recent, today)[:5], "unread_count": unread_count(c, g.user_id)}
+               "recent": build_days(recent, today)[:5], "unread_count": unread_count(c, g.user_id),
+               "next_class": _next_class(c, g.user_id)}
     return jsonify(out)
+
+
+def _next_class(c, user_id):
+    """The next class today or on the following days, within a week."""
+    from .student_school import schedule_events
+    now = db.school_now()
+    start = now.date()
+    for ev in schedule_events(c, user_id, start, start + timedelta(days=6)):
+        if datetime.fromisoformat(ev["end"]) > now:
+            return ev
+    return None
 
 
 @bp.patch("/me/preferences")
@@ -164,8 +188,18 @@ def attendance_list():
     today = _today_str()
     with connect() as c:
         days = build_days(_logs_between(c, g.user_id, start, end), today)
+        calendar = attendance.student_calendar(c, g.user_id, start, min(end, date.fromisoformat(today)))
+    by_date = {d["date"]: d for d in calendar}
+    for d in days:
+        cal = by_date.get(d["date"])
+        d["day_status"] = cal["day_status"] if cal else None
+        d["late_minutes"] = cal["late_minutes"] if cal else 0
     summary = {k: sum(1 for d in days if d["status"] == k) for k in ("complete", "incomplete", "pending")}
-    return jsonify(**{"from": start.isoformat(), "to": end.isoformat()}, days=days, summary=summary)
+    summary.update(attendance.summarize(calendar))
+    cal_out = [{"date": d["date"], "day_status": d["day_status"], "late_minutes": d["late_minutes"]}
+               for d in calendar]
+    return jsonify(**{"from": start.isoformat(), "to": end.isoformat()}, days=days, summary=summary,
+                   calendar=cal_out)
 
 
 @bp.get("/attendance/<day>")

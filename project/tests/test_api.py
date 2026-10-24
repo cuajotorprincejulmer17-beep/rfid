@@ -6,6 +6,7 @@ from contextlib import closing
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["ADMIN_API_KEY"] = "test-admin-key-0123456789"
+os.environ["JOBS_ENABLED"] = "0"
 
 import database as db  # noqa: E402
 
@@ -27,7 +28,7 @@ class Base(unittest.TestCase):
         with closing(db.get_conn()) as c:
             for t in ("users", "logs", "events", "student_profiles", "student_accounts", "claim_codes",
                       "api_sessions", "notifications", "notification_prefs", "push_devices",
-                      "push_tickets", "faculty_contacts"):
+                      "push_tickets", "faculty_contacts", "tap_events"):
                 c.execute(f"DELETE FROM {t}")
         limiter.reset()
         push.drain()

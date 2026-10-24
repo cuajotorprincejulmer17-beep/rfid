@@ -16,6 +16,10 @@ class PulseTextField extends StatelessWidget {
     this.textInputAction,
     this.onSubmitted,
     this.enabled = true,
+    this.obscureText = false,
+    this.autofillHints,
+    this.textCapitalization = TextCapitalization.none,
+    this.suffix,
   });
 
   final TextEditingController controller;
@@ -27,6 +31,14 @@ class PulseTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
   final bool enabled;
+
+  /// Hides the text, for passwords.
+  final bool obscureText;
+  final Iterable<String>? autofillHints;
+  final TextCapitalization textCapitalization;
+
+  /// A trailing control inside the field, such as a show-password toggle.
+  final Widget? suffix;
 
   @override
   Widget build(BuildContext context) {
@@ -48,9 +60,15 @@ class PulseTextField extends StatelessWidget {
           keyboardType: keyboardType,
           textInputAction: textInputAction,
           onSubmitted: onSubmitted,
+          obscureText: obscureText,
+          autocorrect: !obscureText,
+          enableSuggestions: !obscureText,
+          autofillHints: autofillHints,
+          textCapitalization: textCapitalization,
           style: PulseType.body.copyWith(color: t.textPrimary),
           decoration: InputDecoration(
             hintText: hint,
+            suffixIcon: suffix,
             hintStyle: PulseType.body.copyWith(color: t.textSecondary),
             errorText: errorText,
             errorStyle: PulseType.caption.copyWith(color: t.error),

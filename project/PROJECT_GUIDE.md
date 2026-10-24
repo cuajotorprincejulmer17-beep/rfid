@@ -1,5 +1,9 @@
 # RFID Tap In/Out System — Complete Build & Execution Guide
 
+> **Update (2026-10-24):** the system now has reader keys and firmware v2, staff accounts and a browser admin console,
+> school structure, late/absent rules, reports and the student app API. For running it today see
+> `../docs/DEPLOYMENT.md` and `API_README.md`. The hardware and wiring sections below are still current.
+
 > **For the executing agent:** This document contains everything needed to build a complete
 > RFID tap-in/tap-out attendance system. Follow the phases in order. Create all files exactly
 > as specified. Do not add features beyond what is written here.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/pulse_app.dart';
+import 'app/session.dart';
 import 'core/accessibility/motion_preferences.dart';
 import 'core/api/api_client.dart';
 import 'core/auth/auth_controller.dart';
@@ -9,22 +10,20 @@ import 'core/auth/token_store.dart';
 import 'core/storage/preferences_store.dart';
 import 'features/splash/pulse_splash_screen.dart';
 
-/// Server configuration.
-///
-/// The URL is supplied at build time with `--dart-define=API_BASE_URL=...`.
-/// It is a plain address, never a secret. The default points at the host
-/// machine's LAN address, because a phone cannot reach `localhost`.
-const String kApiBaseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'http://10.0.2.2:5001',
-);
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final preferences = await PreferencesStore.open();
   final tokenStore = SecureTokenStore();
-  final api = ApiClient(baseUrl: kApiBaseUrl, tokenStore: tokenStore);
+  // The server address is a plain address, never a secret. The student can
+  // change it in Settings; the build-time default is the fallback.
+  final storedUrl = preferences.getString(PrefKeys.serverUrl);
+  final api = ApiClient(
+    baseUrl: (storedUrl == null || storedUrl.isEmpty)
+        ? kDefaultServerUrl
+        : storedUrl,
+    tokenStore: tokenStore,
+  );
   final auth = AuthController(api: api, tokenStore: tokenStore);
 
   // When a refresh fails the session is gone; route back to sign-in.
@@ -35,6 +34,8 @@ Future<void> main() async {
   runApp(
     PulseProviderScope(
       preferences: preferences,
+      api: api,
+      auth: auth,
       child: PulseBootstrap(api: api, auth: auth, tokenStore: tokenStore),
     ),
   );
@@ -68,18 +69,22 @@ class _PulseBootstrapState extends ConsumerState<PulseBootstrap> {
     // Watched so the splash rebuilds when the preference changes.
     ref.watch(reduceMotionControllerProvider);
 
-    return Stack(
-      children: [
-        const PulseApp(),
-        if (!_splashDone)
-          Positioned.fill(
-            child: PulseSplashScreen(
-              onFinished: () {
-                if (mounted) setState(() => _splashDone = true);
-              },
+    // The splash sits above MaterialApp, so it supplies its own direction.
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Stack(
+        children: [
+          const PulseApp(),
+          if (!_splashDone)
+            Positioned.fill(
+              child: PulseSplashScreen(
+                onFinished: () {
+                  if (mounted) setState(() => _splashDone = true);
+                },
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import '../../data/models/models.dart' show SupportTicket;
 import '../models/demo_models.dart';
 
 /// The state the sample repositories are in.
@@ -22,20 +23,20 @@ enum DemoScenario {
   unverified;
 
   String get label => switch (this) {
-        DemoScenario.normal => 'Normal',
-        DemoScenario.empty => 'Empty',
-        DemoScenario.error => 'Error',
-        DemoScenario.offline => 'Offline',
-        DemoScenario.unverified => 'Unverified',
-      };
+    DemoScenario.normal => 'Normal',
+    DemoScenario.empty => 'Empty',
+    DemoScenario.error => 'Error',
+    DemoScenario.offline => 'Offline',
+    DemoScenario.unverified => 'Unverified',
+  };
 
   String get description => switch (this) {
-        DemoScenario.normal => 'Everything loads normally.',
-        DemoScenario.empty => 'The server confirms there is nothing to show.',
-        DemoScenario.error => 'Requests fail, so the status is unknown.',
-        DemoScenario.offline => 'The device is offline.',
-        DemoScenario.unverified => 'The permission the feature needs is missing.',
-      };
+    DemoScenario.normal => 'Everything loads normally.',
+    DemoScenario.empty => 'The server confirms there is nothing to show.',
+    DemoScenario.error => 'Requests fail, so the status is unknown.',
+    DemoScenario.offline => 'The device is offline.',
+    DemoScenario.unverified => 'The permission the feature needs is missing.',
+  };
 }
 
 /// Reads the schedule.
@@ -123,4 +124,10 @@ abstract interface class SupportRepository {
 
   /// Every support path.
   Future<List<AssistancePath>> assistance();
+
+  /// Sends a message to the school office.
+  Future<void> sendTicket({required String subject, required String body});
+
+  /// The student's messages and the office's replies, newest first.
+  Future<List<SupportTicket>> tickets();
 }

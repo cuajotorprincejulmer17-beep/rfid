@@ -210,20 +210,65 @@ def require_auth(fn):
     return wrapper
 
 
-def require_admin(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        key = os.environ.get("ADMIN_API_KEY", "")
-        if len(key) < 16:
-            raise ApiError(503, "admin_disabled",
-                           "Admin API is disabled. Set ADMIN_API_KEY (16+ characters) on the server.")
-        limiter.check(f"admin-fail:{client_ip()}", 10, 600)
-        provided = request.headers.get("X-Admin-Key", "")
-        if not hmac.compare_digest(provided.encode(), key.encode()):
-            limiter.add(f"admin-fail:{client_ip()}")
-            raise ApiError(401, "unauthorized", "Invalid admin key.")
-        return fn(*args, **kwargs)
-    return wrapper
+STAFF_ROLES = ("admin", "registrar", "teacher", "guard")
+KEY_STAFF = {"id": None, "username": "admin-key", "full_name": "Admin key", "role": "admin"}
+
+
+def staff_from_token(token):
+    """The active staff member behind a console token, or None."""
+    if not token or len(token) < 20:
+        return None
+    with connect() as c:
+        row = c.execute(
+            """SELECT a.id, a.username, a.full_name, a.role, s.expires_at
+               FROM staff_sessions s JOIN staff_accounts a ON a.id = s.staff_id
+               WHERE s.token_hash = ? AND s.revoked = 0 AND a.active = 1""", (sha(token),)).fetchone()
+    if row is None or row["expires_at"] < now_text():
+        return None
+    return {"id": row["id"], "username": row["username"], "full_name": row["full_name"], "role": row["role"]}
+
+
+def require_staff(*roles):
+    """Admin routes: a staff console token (Bearer) with one of [roles], or the
+    X-Admin-Key used by tools/school_admin.py. The admin role passes every check."""
+    allowed = set(roles) | {"admin"}
+
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            header = request.headers.get("Authorization", "")
+            if header.startswith("Bearer "):
+                staff = staff_from_token(header[7:].strip())
+                if staff is None:
+                    raise ApiError(401, "unauthorized", "Sign in to the admin console.")
+                if staff["role"] not in allowed:
+                    raise ApiError(403, "forbidden", "Your role cannot do this.")
+                g.staff = staff
+                return fn(*args, **kwargs)
+            key = os.environ.get("ADMIN_API_KEY", "")
+            if len(key) < 16:
+                raise ApiError(503, "admin_disabled",
+                               "Sign in to the admin console, or set ADMIN_API_KEY (16+ characters) on the server.")
+            limiter.check(f"admin-fail:{client_ip()}", 10, 600)
+            provided = request.headers.get("X-Admin-Key", "")
+            if not hmac.compare_digest(provided.encode(), key.encode()):
+                limiter.add(f"admin-fail:{client_ip()}")
+                raise ApiError(401, "unauthorized", "Invalid admin key.")
+            g.staff = dict(KEY_STAFF)
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+# Registrar-level routes (students, claim codes, contacts, announcements).
+require_admin = require_staff("registrar")
+
+
+def audit(c, action, detail=""):
+    """Records an admin change. Call inside the write transaction."""
+    staff = getattr(g, "staff", None) or {}
+    c.execute("INSERT INTO audit_log (staff_id, action, detail, at) VALUES (?, ?, ?, ?)",
+              (staff.get("id"), action, str(detail)[:500], now_text()))
 
 
 @bp.get("/health")

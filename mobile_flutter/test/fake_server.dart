@@ -34,8 +34,12 @@ class FakeSchoolServer {
   /// Requests seen by the fake, in order.
   final List<String> requests = [];
 
-  ApiClient client({String baseUrl = 'http://school.test:5001'}) {
-    final store = FakeTokenStore()
+  /// A client wired to this fake. [store] defaults to a signed-in store.
+  ApiClient client({
+    String baseUrl = 'http://school.test:5001',
+    TokenStore? store,
+  }) {
+    store ??= FakeTokenStore()
       ..access = 'test-access-token'
       ..refresh = 'test-refresh-token';
     return ApiClient(
@@ -109,8 +113,7 @@ Map<String, dynamic> homePayload({
       'student_number': '2026-0001',
       'course_section': 'BSCS-1A',
       'phone': '09171234567',
-      'rfid_registered': true,
-      'rfid_status': 'registered',
+      'rfid': {'registered': true, 'status': 'registered'},
     },
     'today': {
       'date': '2026-10-20',
@@ -183,7 +186,7 @@ Map<String, dynamic> notificationsPayload() {
         'title': 'Attendance Recorded',
         'body': 'Your time in was recorded at 9:23 PM.',
         'created_at': '2026-10-20T21:23:00+08:00',
-        'is_read': false,
+        'read': false,
         'read_at': null,
       },
       {
@@ -192,7 +195,7 @@ Map<String, dynamic> notificationsPayload() {
         'title': 'Welcome to PULSE',
         'body': 'Your student account is now active.',
         'created_at': '2026-10-19T08:00:00+08:00',
-        'is_read': true,
+        'read': true,
         'read_at': '2026-10-19T09:00:00+08:00',
       },
     ],

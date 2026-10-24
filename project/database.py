@@ -1,8 +1,12 @@
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
-DB_NAME = "rfid_system.db"
+import config
+
+# Absolute, so the server finds the same database whatever folder it starts in.
+DB_NAME = config.DB_PATH
 SCHOOL_TZ = timezone(timedelta(hours=8))
+FMT = "%Y-%m-%d %H:%M:%S"
 
 
 def school_now():
@@ -15,6 +19,8 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
+    # WAL lets the kiosk, admin and mobile readers run while a tap writes.
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +31,7 @@ def init_db():
             time_limit_minutes INTEGER,
             is_expired INTEGER NOT NULL DEFAULT 0,
             archived INTEGER NOT NULL DEFAULT 0,
-            registered_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            registered_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours'))
         )
     """)
     conn.execute("""
@@ -44,6 +50,8 @@ def init_db():
         conn.execute("ALTER TABLE logs ADD COLUMN expected_out TEXT")
     if "flag" not in existing:
         conn.execute("ALTER TABLE logs ADD COLUMN flag TEXT")
+    if "device_id" not in existing:
+        conn.execute("ALTER TABLE logs ADD COLUMN device_id INTEGER")
     existing_cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
     if "time_limit_minutes" not in existing_cols:
         conn.execute("ALTER TABLE users ADD COLUMN time_limit_minutes INTEGER")
@@ -74,9 +82,11 @@ def uid_exists(uid):
 
 def add_user(uid, name, role, is_temp=0, time_limit_minutes=None):
     conn = get_conn()
-    conn.execute("INSERT INTO users (rfid_uid, name, role, is_temp, time_limit_minutes) VALUES (?, ?, ?, ?, ?)",
-                 (uid, name, role, is_temp, time_limit_minutes))
+    cur = conn.execute(
+        "INSERT INTO users (rfid_uid, name, role, is_temp, time_limit_minutes, registered_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (uid, name, role, is_temp, time_limit_minutes, school_now().strftime(FMT)))
     conn.close()
+    return cur.lastrowid
 
 def upgrade_temp_user(uid, name, role, time_limit_minutes=None):
     conn = get_conn()
@@ -86,13 +96,6 @@ def upgrade_temp_user(uid, name, role, time_limit_minutes=None):
     else:
         conn.execute("UPDATE users SET name = ?, role = ?, is_temp = 0, time_limit_minutes = ? WHERE rfid_uid = ?",
                      (name, role, time_limit_minutes, uid))
-    conn.close()
-
-
-def expire_visitor_card(uid):
-    """Mark a visitor card as expired after a complete visit (time in + time out)."""
-    conn = get_conn()
-    conn.execute("UPDATE users SET is_expired = 1 WHERE rfid_uid = ? AND role = 'visitor'", (uid,))
     conn.close()
 
 
@@ -120,9 +123,9 @@ def re_register_visitor_card(uid, name, role, time_limit_minutes=None):
         conn.execute("UPDATE users SET rfid_uid = ?, archived = 1, is_expired = 1 WHERE id = ?",
                      (f"{uid}#USED{old['id']}", old["id"]))
         conn.execute(
-            "INSERT INTO users (rfid_uid, name, role, is_temp, time_limit_minutes, is_expired, archived) "
-            "VALUES (?, ?, ?, 0, ?, 0, 0)",
-            (uid, name, role, time_limit_minutes),
+            "INSERT INTO users (rfid_uid, name, role, is_temp, time_limit_minutes, is_expired, archived, registered_at) "
+            "VALUES (?, ?, ?, 0, ?, 0, 0, ?)",
+            (uid, name, role, time_limit_minutes, school_now().strftime(FMT)),
         )
         conn.execute("COMMIT")
         return True
@@ -166,15 +169,7 @@ def get_visitor_time_limit_minutes(uid):
         return row["time_limit_minutes"]
     return None
 
-def open_log_exists(user_id):
-    conn = get_conn()
-    row = conn.execute("SELECT id FROM logs WHERE user_id = ? AND time_out IS NULL",
-                       (user_id,)).fetchone()
-    conn.close()
-    return row is not None
-
-
-def record_tap(uid, mode, limit_hours=None):
+def record_tap(uid, mode, limit_hours=None, device_id=None, at=None):
     """Apply one tap atomically.
 
     Returns ``(result_code, user_row, log_id)`` after the transaction commits.
@@ -183,6 +178,8 @@ def record_tap(uid, mode, limit_hours=None):
     for post-commit work without guessing which log is newest.
 
     ``limit_hours`` may be None when the card has its own time_limit_minutes.
+    ``device_id`` names the reader. ``at`` is the moment of the tap when it
+    is replayed from a reader's offline queue; it defaults to now.
     """
     conn = get_conn()
     try:
@@ -197,8 +194,8 @@ def record_tap(uid, mode, limit_hours=None):
             conn.execute("COMMIT")
             return "REJECT_EXPIRED_VISITOR", user, None
 
-        now = school_now()
-        now_text = now.strftime("%Y-%m-%d %H:%M:%S")
+        now = at or school_now()
+        now_text = now.strftime(FMT)
         today = now.strftime("%Y-%m-%d")
         conn.execute("""
             UPDATE logs SET flag = 'MISSING_TIME_OUT'
@@ -239,12 +236,12 @@ def record_tap(uid, mode, limit_hours=None):
             if user["role"] == "visitor":
                 # Use per-card time_limit_minutes if available, otherwise fall back to limit_hours
                 if user["time_limit_minutes"] is not None:
-                    expected_out = (now + timedelta(minutes=user["time_limit_minutes"])).strftime("%Y-%m-%d %H:%M:%S")
+                    expected_out = (now + timedelta(minutes=user["time_limit_minutes"])).strftime(FMT)
                 elif limit_hours is not None:
-                    expected_out = (now + timedelta(hours=limit_hours)).strftime("%Y-%m-%d %H:%M:%S")
+                    expected_out = (now + timedelta(hours=limit_hours)).strftime(FMT)
             log_id = conn.execute(
-                "INSERT INTO logs (user_id, time_in, expected_out) VALUES (?, ?, ?)",
-                (user["id"], now_text, expected_out),
+                "INSERT INTO logs (user_id, time_in, expected_out, device_id) VALUES (?, ?, ?, ?)",
+                (user["id"], now_text, expected_out, device_id),
             ).lastrowid
             result = "TIME_IN_OK"
         elif open_record["expected_out"] and now_text > open_record["expected_out"]:
@@ -273,20 +270,6 @@ def count_today():
     ).fetchone()[0]
     conn.close()
     return count
-
-def log_time_in(user_id):
-    conn = get_conn()
-    conn.execute("INSERT INTO logs (user_id, time_in) VALUES (?, datetime('now','localtime'))",
-                 (user_id,))
-    conn.commit()
-    conn.close()
-
-def log_time_out(user_id):
-    conn = get_conn()
-    conn.execute("UPDATE logs SET time_out = datetime('now','localtime') "
-                 "WHERE user_id = ? AND time_out IS NULL", (user_id,))
-    conn.commit()
-    conn.close()
 
 def get_recent_logs(limit=30):
     conn = get_conn()

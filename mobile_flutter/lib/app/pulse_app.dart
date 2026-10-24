@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/api/api_client.dart';
+import '../core/auth/auth_controller.dart';
 import '../core/routing/app_router.dart';
 import '../core/storage/preferences_store.dart';
 import '../core/theme/pulse_theme.dart';
 import '../core/theme/pulse_tokens.dart';
 import '../core/theme/theme_controller.dart';
+import 'live_refresh.dart';
 import 'route_builders.dart';
+import 'session.dart';
 
 /// The Pulse app root.
 ///
@@ -22,7 +26,10 @@ class PulseApp extends ConsumerStatefulWidget {
 }
 
 class _PulseAppState extends ConsumerState<PulseApp> {
-  late final GoRouter _router = buildRouter(buildRouteBuilders());
+  late final GoRouter _router = buildRouter(
+    buildRouteBuilders(),
+    auth: ref.read(authControllerProvider),
+  );
 
   @override
   void dispose() {
@@ -39,6 +46,7 @@ class _PulseAppState extends ConsumerState<PulseApp> {
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
       theme: buildPulseTheme(theme.tokens),
+      builder: (context, child) => LiveRefresh(child: child!),
     );
   }
 }
@@ -49,15 +57,25 @@ class PulseProviderScope extends StatelessWidget {
     super.key,
     required this.preferences,
     required this.child,
+    this.api,
+    this.auth,
   });
 
   final PreferencesStore preferences;
   final Widget child;
 
+  /// The school server client. Null runs the app without a backend.
+  final ApiClient? api;
+  final AuthController? auth;
+
   @override
   Widget build(BuildContext context) {
     return ProviderScope(
-      overrides: [preferencesStoreProvider.overrideWithValue(preferences)],
+      overrides: [
+        preferencesStoreProvider.overrideWithValue(preferences),
+        apiClientProvider.overrideWithValue(api),
+        authControllerProvider.overrideWithValue(auth),
+      ],
       child: child,
     );
   }

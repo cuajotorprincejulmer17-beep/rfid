@@ -17,6 +17,12 @@ from PySide6.QtGui import (QColor, QFont, QFontMetrics, QLinearGradient, QPainte
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
 SERVER = os.environ.get("RFID_SERVER", "http://127.0.0.1:5001")
+# With a reader key (RFID readers -> Add reader) this kiosk shows and arms only
+# that reader. Without one it uses the original routes, i.e. the DEFAULT reader.
+DEVICE_KEY = os.environ.get("RFID_DEVICE_KEY", "").strip()
+DEVICE_HEADERS = {"X-Device-Key": DEVICE_KEY} if DEVICE_KEY else {}
+DISPLAY_URL = SERVER + ("/api/v1/device/display-event" if DEVICE_KEY else "/display-event")
+ARM_URL = SERVER + ("/api/v1/device/arm-timeout" if DEVICE_KEY else "/timeout-arm")
 TIMEOUT_ARM_SECONDS = 15      # how long "TIME OUT" waits for the card tap
 DISPLAY_SECONDS = 4.5         # how long a result stays on screen
 SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "student_display_settings.json")
@@ -170,7 +176,7 @@ class StudentDisplay(QWidget):
         last_id = None
         while self.running:
             try:
-                response = requests.get(SERVER + "/display-event", timeout=1.2)
+                response = requests.get(DISPLAY_URL, headers=DEVICE_HEADERS, timeout=1.2)
                 response.raise_for_status()
                 event = response.json()
                 self.bridge.online.emit(True)
@@ -192,7 +198,7 @@ class StudentDisplay(QWidget):
 
         def work():
             try:
-                requests.post(SERVER + "/timeout-arm", timeout=2).raise_for_status()
+                requests.post(ARM_URL, headers=DEVICE_HEADERS, json={}, timeout=2).raise_for_status()
                 self.bridge.armed.emit(True)
             except requests.RequestException:
                 self.bridge.armed.emit(False)

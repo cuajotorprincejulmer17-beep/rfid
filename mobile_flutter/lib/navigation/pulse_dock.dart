@@ -132,8 +132,7 @@ class _DockItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.pulse;
-    final showLabel = selected &&
-        MediaQuery.textScalerOf(context).scale(1) < 1.3;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
 
     return Semantics(
       button: true,
@@ -142,9 +141,15 @@ class _DockItem extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: AnimatedBuilder(
+        child: LayoutBuilder(builder: (context, constraints) => AnimatedBuilder(
           animation: spring,
           builder: (context, child) {
+            // The label needs room for the icon, the text and the pill
+            // padding; on a narrow phone the pill stays icon-only rather
+            // than overflowing. The semantics label still names the tab.
+            final showLabel = selected &&
+                textScale < 1.3 &&
+                constraints.maxWidth >= _labelWidth(destination.title, textScale);
             return Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -212,8 +217,22 @@ class _DockItem extends StatelessWidget {
               ],
             );
           },
-        ),
+        )),
       ),
     );
+  }
+
+  /// The width a pill with an icon and [title] needs: icon, gap, text and
+  /// horizontal padding, measured with the label style.
+  static double _labelWidth(String title, double textScale) {
+    final painter = TextPainter(
+      text: TextSpan(text: title, style: PulseType.label),
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.linear(textScale),
+      maxLines: 1,
+    )..layout();
+    final width = 22 + PulseSpacing.xs + painter.width + PulseSpacing.md * 2 + 2;
+    painter.dispose();
+    return width;
   }
 }

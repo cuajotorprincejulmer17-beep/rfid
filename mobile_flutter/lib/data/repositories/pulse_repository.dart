@@ -18,7 +18,10 @@ class PulseRepository {
   }
 
   /// `GET /me` — profile, preferences and unread count.
-  Future<({PulseProfile profile, PulsePreferences preferences, int unreadCount})> fetchMe() async {
+  Future<
+    ({PulseProfile profile, PulsePreferences preferences, int unreadCount})
+  >
+  fetchMe() async {
     final json = await _api.getJson('/me');
     final rawPrefs = json['preferences'];
     return (
@@ -44,7 +47,8 @@ class PulseRepository {
 
   /// `GET /attendance/<YYYY-MM-DD>`.
   Future<AttendanceDay> fetchDay(DateTime date) async {
-    final stamp = '${date.year.toString().padLeft(4, '0')}-'
+    final stamp =
+        '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';
     final json = await _api.getJson('/attendance/$stamp');
@@ -70,6 +74,30 @@ class PulseRepository {
         .whereType<Map>()
         .map((e) => FacultyContact.fromJson(Map<String, dynamic>.from(e)))
         .toList();
+  }
+
+  /// `GET /excuses` — the student's excuse letters, newest first.
+  Future<List<ExcuseLetter>> fetchExcuses() async {
+    final json = await _api.getJson('/excuses');
+    final raw = json['items'];
+    if (raw is! List) return const <ExcuseLetter>[];
+    return raw
+        .whereType<Map>()
+        .map((e) => ExcuseLetter.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  /// `POST /excuses`.
+  Future<ExcuseLetter> submitExcuse(DateTime date, String reason) async {
+    final stamp =
+        '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+    final json = await _api.postJson('/excuses', {
+      'date': stamp,
+      'reason': reason,
+    });
+    return ExcuseLetter.fromJson(json);
   }
 
   /// `GET /health` — used by the "test connection" action in Settings.

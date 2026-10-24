@@ -4,8 +4,11 @@ import secrets
 import sqlite3
 import time
 
+from datetime import datetime
+
+from services import attendance
 from . import push
-from .common import clock, connect, later, now_text
+from .common import FMT, clock, connect, later, now_text
 
 log = logging.getLogger("api.notifier")
 
@@ -54,6 +57,15 @@ def process_tap(code, user_id, log_id=None):
                           (log_id, user_id)).fetchone()
             if r is None or not r["time_in"]:
                 return None
+            pol = attendance.policy(c)
+            late = attendance.late_minutes(datetime.strptime(r["time_in"], FMT), pol)
+            if late:
+                start = clock(f"{r['time_in'][:10]} {pol['school_start'].strftime('%H:%M')}:00")
+                return create_notification(
+                    c, user_id, "attendance", "Late Arrival Recorded",
+                    f"Your time in was recorded at {clock(r['time_in'])}, {late} minutes after "
+                    f"the {start} start.",
+                    f"log:{r['id']}:IN", r["id"])
             return create_notification(
                 c, user_id, "attendance", "Attendance Recorded",
                 f"Your time in has been recorded successfully at {clock(r['time_in'])}.",
@@ -93,17 +105,44 @@ def process_tap(code, user_id, log_id=None):
     return None
 
 
-def create_announcement(category, title, body):
-    """Insert one inbox row for every active student account, then queue pushes. Returns the count."""
-    key = f"ann:{secrets.token_hex(8)}"
+def create_announcement(category, title, body, section_id=None, key=None):
+    """Insert one inbox row for every active student account (in [section_id]
+    when given), then queue pushes. Returns the count."""
+    key = key or f"ann:{secrets.token_hex(8)}"
     ids = []
     with connect(write=True) as c:
-        users = c.execute("""SELECT a.user_id FROM student_accounts a JOIN users u ON u.id = a.user_id
-                             WHERE u.archived = 0 AND u.role = 'student'""").fetchall()
-        for u in users:
+        sql = """SELECT a.user_id FROM student_accounts a JOIN users u ON u.id = a.user_id
+                 LEFT JOIN student_profiles p ON p.user_id = a.user_id
+                 WHERE u.archived = 0 AND u.role = 'student'"""
+        args = []
+        if section_id:
+            sql += " AND p.section_id = ?"
+            args.append(section_id)
+        for u in c.execute(sql, args).fetchall():
             nid = create_notification(c, u["user_id"], category, title, body, key)
             if nid:
                 ids.append(nid)
     for nid in ids:
         push.submit("push", nid=nid)
     return len(ids)
+
+
+def notify_users(user_ids, category, title, body, dedupe_key=None, log_id=None):
+    """One inbox row per student who has an app account. Queues pushes. Returns the ids."""
+    ids = []
+    with connect(write=True) as c:
+        for uid in set(user_ids):
+            if not c.execute("SELECT 1 FROM student_accounts WHERE user_id = ?", (uid,)).fetchone():
+                continue
+            nid = create_notification(c, uid, category, title, body, dedupe_key, log_id)
+            if nid:
+                ids.append(nid)
+    for nid in ids:
+        push.submit("push", nid=nid)
+    return ids
+
+
+def section_students(c, section_id):
+    return [r["user_id"] for r in c.execute(
+        """SELECT p.user_id FROM student_profiles p JOIN users u ON u.id = p.user_id
+           WHERE p.section_id = ? AND u.archived = 0 AND u.role = 'student'""", (section_id,))]

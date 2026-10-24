@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PULSE Admin</title>
+  <link rel="stylesheet" href="/admin/assets/app.css">
+</head>
+<body>
+  <div id="app" class="app" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><span class="brand-mark">◉</span> PULSE <small>Admin</small></div>
+      <nav id="nav"></nav>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+        <h1 id="pageTitle">Dashboard</h1>
+        <div class="topbar-right">
+          <span id="whoami" class="muted"></span>
+          <button class="btn ghost" id="passwordBtn">Password</button>
+          <button class="btn ghost" id="logoutBtn">Sign out</button>
+        </div>
+      </header>
+      <main id="view" class="view"></main>
+    </div>
+  </div>
+
+  <div id="login" class="login" hidden>
+    <form id="loginForm" class="login-card">
+      <div class="brand big"><span class="brand-mark">◉</span> PULSE Admin</div>
+      <p class="muted">Sign in with your staff account.</p>
+      <label>Username <input name="username" autocomplete="username" required></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <p id="loginError" class="error" hidden></p>
+      <button class="btn primary" type="submit">Sign in</button>
+      <p class="muted small">No account yet? On the server PC run<br><code>python tools/manage.py create-staff</code></p>
+    </form>
+  </div>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head"><h2 id="modalTitle"></h2><button class="icon-btn" id="modalClose" aria-label="Close">✕</button></div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="/admin/assets/app.js"></script>
+</body>
+</html>

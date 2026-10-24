@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../models/app_failure.dart';
+import '../../../data/models/models.dart' show SupportTicket;
 import '../../models/demo_models.dart';
 import '../repositories.dart';
 import 'sample_data.dart';
@@ -83,8 +84,7 @@ class SampleScheduleRepository extends _SampleRepository
 }
 
 /// The sample tasks.
-class SampleTaskRepository extends _SampleRepository
-    implements TaskRepository {
+class SampleTaskRepository extends _SampleRepository implements TaskRepository {
   SampleTaskRepository(super.scenario);
 
   final List<PulseTask> _tasks = List<PulseTask>.from(sampleTasks);
@@ -193,8 +193,7 @@ class SampleUpdatesRepository extends _SampleRepository
 }
 
 /// The sample rooms.
-class SampleRoomRepository extends _SampleRepository
-    implements RoomRepository {
+class SampleRoomRepository extends _SampleRepository implements RoomRepository {
   SampleRoomRepository(super.scenario);
 
   @override
@@ -360,8 +359,7 @@ class SampleLibraryRepository extends _SampleRepository
 }
 
 /// The sample campus map.
-class SampleMapRepository extends _SampleRepository
-    implements MapRepository {
+class SampleMapRepository extends _SampleRepository implements MapRepository {
   SampleMapRepository(super.scenario);
 
   @override
@@ -414,4 +412,17 @@ class SampleSupportRepository extends _SampleRepository
     if (failure != null) throw failure;
     return List<AssistancePath>.from(sampleAssistance);
   }
+
+  @override
+  Future<void> sendTicket({
+    required String subject,
+    required String body,
+  }) async {
+    await _wait();
+    final failure = _failure();
+    if (failure != null) throw failure;
+  }
+
+  @override
+  Future<List<SupportTicket>> tickets() async => const <SupportTicket>[];
 }

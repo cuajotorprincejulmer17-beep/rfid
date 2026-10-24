@@ -2,12 +2,12 @@
 import sqlite3
 from datetime import timedelta
 
-from flask import jsonify, request
+from flask import g, jsonify, request
 
 from . import notifier
 from .auth import code_hash, new_claim_code
-from .common import (ApiError, PHONE, STUDENT_NO, bp, connect, json_body, later, now_dt, now_text,
-                     require_admin, text_field, to_iso)
+from .common import (ApiError, PHONE, STUDENT_NO, audit, bp, connect, json_body, later, now_dt, now_text,
+                     require_admin, require_staff, text_field, to_iso)
 
 
 def _active_student(c, user_id):
@@ -19,22 +19,48 @@ def _active_student(c, user_id):
 
 
 @bp.get("/admin/students")
-@require_admin
+@require_staff("registrar", "teacher", "guard")
 def admin_students():
     q = (request.args.get("q") or "").strip()[:50]
+    section = request.args.get("section_id")
+    sql = """SELECT u.id, u.name, u.rfid_uid, u.registered_at, p.student_number, p.course_section, p.phone,
+                    p.section_id, s.name AS section_name, a.user_id IS NOT NULL AS claimed,
+                    (SELECT COUNT(*) FROM guardians gd WHERE gd.user_id = u.id) AS guardians
+             FROM users u LEFT JOIN student_profiles p ON p.user_id = u.id
+             LEFT JOIN sections s ON s.id = p.section_id
+             LEFT JOIN student_accounts a ON a.user_id = u.id
+             WHERE u.role = 'student' AND u.archived = 0
+               AND (? = '' OR u.name LIKE '%' || ? || '%' OR p.student_number LIKE '%' || ? || '%')"""
+    args = [q, q, q]
+    if section:
+        sql += " AND p.section_id = ?"
+        args.append(section)
     with connect() as c:
-        rows = c.execute(
-            """SELECT u.id, u.name, p.student_number, p.course_section, p.phone,
-                      a.user_id IS NOT NULL AS claimed
-               FROM users u LEFT JOIN student_profiles p ON p.user_id = u.id
-               LEFT JOIN student_accounts a ON a.user_id = u.id
-               WHERE u.role = 'student' AND u.archived = 0
-                 AND (? = '' OR u.name LIKE '%' || ? || '%' OR p.student_number LIKE '%' || ? || '%')
-               ORDER BY u.name LIMIT 500""", (q, q, q)).fetchall()
-    return jsonify(items=[{"user_id": r["id"], "name": r["name"], "student_number": r["student_number"],
+        rows = c.execute(sql + " ORDER BY u.name LIMIT 1000", args).fetchall()
+    return jsonify(items=[{"id": r["id"], "user_id": r["id"], "name": r["name"], "rfid_uid": r["rfid_uid"],
+                           "registered_at": r["registered_at"], "student_number": r["student_number"],
                            "course_section": r["course_section"], "phone": r["phone"],
-                           "has_profile": r["student_number"] is not None, "claimed": bool(r["claimed"])}
+                           "section_id": r["section_id"], "section_name": r["section_name"],
+                           "has_profile": r["student_number"] is not None, "claimed": bool(r["claimed"]),
+                           "guardians": r["guardians"]}
                           for r in rows])
+
+
+def save_profile(c, user_id, sn, section, phone, section_id=None):
+    """Creates or updates a student's profile. Raises ApiError on a duplicate number."""
+    if section_id is not None:
+        row = c.execute("SELECT name FROM sections WHERE id = ?", (section_id,)).fetchone()
+        if row is None:
+            raise ApiError(400, "invalid_field", "No such section.")
+        section = section or row["name"]
+    try:
+        c.execute("""INSERT INTO student_profiles (user_id, student_number, course_section, phone, section_id,
+                     updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET
+                     student_number = excluded.student_number, course_section = excluded.course_section,
+                     phone = excluded.phone, section_id = excluded.section_id, updated_at = excluded.updated_at""",
+                  (user_id, sn, section, phone, section_id, now_text()))
+    except sqlite3.IntegrityError:
+        raise ApiError(409, "duplicate_student_number", "That student number is already assigned.")
 
 
 @bp.put("/admin/students/<int:user_id>/profile")
@@ -44,16 +70,13 @@ def admin_set_profile(user_id):
     sn = text_field(d, "student_number", min_len=2, max_len=32, pattern=STUDENT_NO)
     section = text_field(d, "course_section", max_len=60, required=False)
     phone = text_field(d, "phone", max_len=25, required=False, pattern=PHONE)
-    try:
-        with connect(write=True) as c:
-            _active_student(c, user_id)
-            c.execute("""INSERT INTO student_profiles (user_id, student_number, course_section, phone, updated_at)
-                         VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET
-                         student_number = excluded.student_number, course_section = excluded.course_section,
-                         phone = excluded.phone, updated_at = excluded.updated_at""",
-                      (user_id, sn, section, phone, now_text()))
-    except sqlite3.IntegrityError:
-        raise ApiError(409, "duplicate_student_number", "That student number is already assigned.")
+    section_id = d.get("section_id")
+    if section_id is not None and (not isinstance(section_id, int) or isinstance(section_id, bool)):
+        raise ApiError(400, "invalid_field", "'section_id' must be a section id.")
+    with connect(write=True) as c:
+        _active_student(c, user_id)
+        save_profile(c, user_id, sn, section, phone, section_id)
+        audit(c, "student.profile", f"#{user_id} {sn}")
     return jsonify(success=True)
 
 
@@ -158,8 +181,28 @@ def admin_contact_delete(cid):
 
 
 # ------------------------------------------------------------------ announcements
+def publish_announcement(category, title, body, section_id=None, pinned=False):
+    """Stores the announcement for the feed and puts it in every recipient's inbox.
+
+    Returns (announcement_id, recipients).
+    """
+    with connect(write=True) as c:
+        if section_id is not None and not c.execute("SELECT 1 FROM sections WHERE id = ?",
+                                                    (section_id,)).fetchone():
+            raise ApiError(400, "invalid_field", "No such section.")
+        staff = getattr(g, "staff", None) or {}
+        cur = c.execute("""INSERT INTO announcements (category, title, body, audience, section_id, pinned,
+                           created_by, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (category, title, body, "section" if section_id else "all", section_id, int(pinned),
+                         staff.get("id"), now_text()))
+        ann_id = cur.lastrowid
+        audit(c, "announcement.create", f"#{ann_id} {title}")
+    recipients = notifier.create_announcement(category, title, body, section_id, key=f"ann:{ann_id}")
+    return ann_id, recipients
+
+
 @bp.post("/admin/announcements")
-@require_admin
+@require_staff("registrar", "teacher")
 def admin_announce():
     d = json_body()
     category = text_field(d, "category", min_len=6, max_len=9)
@@ -167,4 +210,32 @@ def admin_announce():
         raise ApiError(400, "invalid_field", "'category' must be emergency or system.")
     title = text_field(d, "title", max_len=80)
     body = text_field(d, "body", max_len=500)
-    return jsonify(recipients=notifier.create_announcement(category, title, body)), 201
+    section_id = d.get("section_id")
+    if section_id is not None and (not isinstance(section_id, int) or isinstance(section_id, bool)):
+        raise ApiError(400, "invalid_field", "'section_id' must be a section id.")
+    if g.staff["role"] == "teacher" and (section_id is None or category == "emergency"):
+        raise ApiError(403, "forbidden", "Teachers can post announcements to a section only.")
+    ann_id, recipients = publish_announcement(category, title, body, section_id, bool(d.get("pinned")))
+    return jsonify(id=ann_id, recipients=recipients), 201
+
+
+@bp.get("/admin/announcements")
+@require_staff("registrar", "teacher")
+def admin_announcements():
+    with connect() as c:
+        rows = c.execute("""SELECT a.*, s.name AS section_name, st.full_name AS author FROM announcements a
+                            LEFT JOIN sections s ON s.id = a.section_id
+                            LEFT JOIN staff_accounts st ON st.id = a.created_by
+                            ORDER BY a.id DESC LIMIT 200""").fetchall()
+    return jsonify(items=[dict(r) for r in rows])
+
+
+@bp.delete("/admin/announcements/<int:ann_id>")
+@require_admin
+def admin_announcement_delete(ann_id):
+    """Removes it from the feed. Inbox copies already delivered stay with the students."""
+    with connect(write=True) as c:
+        if c.execute("DELETE FROM announcements WHERE id = ?", (ann_id,)).rowcount == 0:
+            raise ApiError(404, "not_found", "No such announcement.")
+        audit(c, "announcement.delete", f"#{ann_id}")
+    return jsonify(success=True)

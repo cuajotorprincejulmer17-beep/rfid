@@ -22,12 +22,16 @@ class SchedulePage extends StatefulWidget {
     super.key,
     required this.events,
     this.loading = false,
+    this.onRangeChanged,
   });
 
   /// The events the page shows, already filtered to the chosen range.
   final List<ScheduleEvent> events;
 
   final bool loading;
+
+  /// Asks the owner to load the events of a different range.
+  final ValueChanged<ScheduleRange>? onRangeChanged;
 
   @override
   State<SchedulePage> createState() => _SchedulePageState();
@@ -82,7 +86,10 @@ class _SchedulePageState extends State<SchedulePage> {
                   PulseSegment(value: ScheduleRange.month, label: 'Month'),
                 ],
                 value: _range,
-                onChanged: (value) => setState(() => _range = value),
+                onChanged: (value) {
+                  setState(() => _range = value);
+                  widget.onRangeChanged?.call(value);
+                },
               ),
 
               const SizedBox(height: PulseSpacing.lg),
@@ -168,7 +175,13 @@ class _EventCard extends StatelessWidget {
       EventStatus.done => ('Done', StatusTone.neutral),
     };
 
-    final time = '${_two(event.start.hour)}:${_two(event.start.minute)}'
+    final now = DateTime.now();
+    final sameDay = event.start.year == now.year &&
+        event.start.month == now.month &&
+        event.start.day == now.day;
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final day = sameDay ? '' : '${days[event.start.weekday - 1]} ${event.start.day} · ';
+    final time = '$day${_two(event.start.hour)}:${_two(event.start.minute)}'
         ' - ${_two(event.end.hour)}:${_two(event.end.minute)}';
 
     return PulseCard(

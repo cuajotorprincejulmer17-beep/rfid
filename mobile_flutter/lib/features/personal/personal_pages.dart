@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/session.dart';
+
 import '../../core/accessibility/motion_preferences.dart';
 import '../../core/theme/pulse_theme.dart';
 import '../../core/theme/pulse_tokens.dart';
 import '../../core/theme/theme_controller.dart';
+import '../auth/server_address_card.dart';
 import '../../shared/repositories/repository_providers.dart';
 import '../../shared/repositories/repositories.dart';
+import '../../shared/widgets/pulse_button.dart';
 import '../../shared/widgets/pulse_card.dart';
 import '../../shared/widgets/pulse_chip.dart';
 import '../../shared/widgets/pulse_page.dart';
@@ -22,12 +26,16 @@ class ProfilePage extends ConsumerStatefulWidget {
     required this.studentNumber,
     this.courseSection,
     this.phone,
+    this.rfidRegistered,
   });
 
   final String name;
   final String studentNumber;
   final String? courseSection;
   final String? phone;
+
+  /// Whether the school registered an RFID card for this student.
+  final bool? rfidRegistered;
 
   @override
   ConsumerState<ProfilePage> createState() => _ProfilePageState();
@@ -91,6 +99,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 const SizedBox(height: PulseSpacing.lg),
                 _Row(label: 'Course section', value: widget.courseSection),
                 _Row(label: 'Phone', value: widget.phone),
+                if (widget.rfidRegistered != null)
+                  _Row(
+                    label: 'RFID card',
+                    value: widget.rfidRegistered! ? 'Registered' : 'Not registered',
+                  ),
                 const SizedBox(height: PulseSpacing.md),
                 Text(
                   'Edit display name',
@@ -301,12 +314,34 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.pulse;
     final scenario = ref.watch(demoScenarioProvider);
+    final auth = ref.watch(authControllerProvider);
+    // Watched so the page rebuilds when the student signs in or out.
+    ref.watch(authStatusProvider);
 
     return PulsePage(
       title: 'Settings',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (auth != null) ...[
+            Text(
+              'School account',
+              style: PulseType.heading.copyWith(color: t.textPrimary),
+            ),
+            const SizedBox(height: PulseSpacing.md),
+            const ServerAddressCard(),
+            if (auth.isSignedIn) ...[
+              const SizedBox(height: PulseSpacing.md),
+              PulseButton(
+                label: 'Sign out',
+                icon: Icons.logout_rounded,
+                variant: PulseButtonVariant.secondary,
+                onPressed: auth.signOut,
+              ),
+            ],
+            const SizedBox(height: PulseSpacing.xl),
+          ],
+          if (ref.watch(usingSampleDataProvider)) ...[
           Text(
             'Sample data scenario',
             style: PulseType.heading.copyWith(color: t.textPrimary),
@@ -337,6 +372,7 @@ class SettingsPage extends ConsumerWidget {
             scenario.description,
             style: PulseType.caption.copyWith(color: t.textSecondary),
           ),
+          ],
 
           const SizedBox(height: PulseSpacing.xl),
 
@@ -361,7 +397,8 @@ class SettingsPage extends ConsumerWidget {
                 const SizedBox(height: PulseSpacing.md),
                 Text(
                   'Attendance is read-only and comes from the school server. '
-                  'Tasks and notes are your own content on your own device. '
+                  'Signed in, tasks, schedules and campus information also come '
+                  'from the school server. '
                   'No biometric, campus security or emergency integration is '
                   'claimed anywhere in this app.',
                   style: PulseType.caption.copyWith(color: t.textSecondary),

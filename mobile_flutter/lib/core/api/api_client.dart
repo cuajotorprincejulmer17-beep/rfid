@@ -57,8 +57,9 @@ class ApiClient {
   }) : _http = httpClient ?? http.Client();
 
   /// Base URL of the school server, e.g. `http://192.168.1.20:5001`.
-  /// The `/api/v1` prefix is appended automatically.
-  final String baseUrl;
+  /// The `/api/v1` prefix is appended automatically. It can change at
+  /// runtime from the Server address setting.
+  String baseUrl;
 
   final TokenStore tokenStore;
   final http.Client _http;

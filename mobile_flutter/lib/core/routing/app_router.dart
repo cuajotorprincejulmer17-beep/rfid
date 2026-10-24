@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/app_shell.dart';
+import '../../features/auth/auth_pages.dart';
 import '../../navigation/app_destination.dart';
 import '../../navigation/destination_registry.dart';
+import '../auth/auth_controller.dart';
+
+/// The sign-in routes. They sit outside the registry: they are not
+/// destinations a signed-in student can navigate to.
+const String kSignInRoute = '/sign-in';
+const String kClaimRoute = '/claim';
 
 /// The root navigator key.
 ///
@@ -19,7 +26,13 @@ final GlobalKey<NavigatorState> rootNavigatorKey =
 /// [builders] maps a registry id to the widget that renders it. Every
 /// registry id must have a builder, and every builder must have a registry
 /// id; the tests enforce both directions.
-GoRouter buildRouter(Map<String, GoRouterWidgetBuilder> builders) {
+///
+/// When [auth] is given, a signed-out student can only reach the sign-in
+/// and claim pages, and a signed-in student is sent away from them.
+GoRouter buildRouter(
+  Map<String, GoRouterWidgetBuilder> builders, {
+  AuthController? auth,
+}) {
   Widget builder(BuildContext context, GoRouterState state, String id) {
     final b = builders[id];
     if (b == null) {
@@ -31,7 +44,28 @@ GoRouter buildRouter(Map<String, GoRouterWidgetBuilder> builders) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: '/home',
+    refreshListenable: auth,
+    redirect: auth == null
+        ? null
+        : (context, state) {
+            final onAuthPage = state.matchedLocation == kSignInRoute ||
+                state.matchedLocation == kClaimRoute;
+            if (!auth.isSignedIn) return onAuthPage ? null : kSignInRoute;
+            return onAuthPage ? '/home' : null;
+          },
     routes: [
+      // ------------------------------------------------------- sign-in
+      if (auth != null) ...[
+        GoRoute(
+          path: kSignInRoute,
+          builder: (context, state) => const SignInPage(),
+        ),
+        GoRoute(
+          path: kClaimRoute,
+          builder: (context, state) => const ClaimAccountPage(),
+        ),
+      ],
+
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             PulseShell(navigationShell: navigationShell),

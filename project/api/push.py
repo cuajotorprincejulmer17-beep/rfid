@@ -144,6 +144,13 @@ def _handle(job):
         nid = notifier.process_tap(job["code"], job["user_id"], job.get("log_id"))
         if nid:
             _deliver(nid, None, 0)
+        from services import sms
+        sms.on_tap(job["code"], job["user_id"], job.get("log_id"))
+    elif job["kind"] == "notify":
+        notifier.notify_users(job["user_ids"], job["category"], job["title"], job["body"], job.get("dedupe_key"))
+    elif job["kind"] == "sms":
+        from services import sms
+        sms.deliver_pending()
     elif job["kind"] == "push":
         _deliver(job["nid"], job.get("tokens"), job["attempt"])
 

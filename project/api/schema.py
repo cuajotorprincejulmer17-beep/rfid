@@ -103,6 +103,12 @@ def purge_user_data(user_id):
     with connect(write=True) as c:
         c.execute("""DELETE FROM push_tickets WHERE notification_id IN
                      (SELECT id FROM notifications WHERE user_id = ?)""", (user_id,))
+        c.execute("DELETE FROM task_completions WHERE user_id = ?", (user_id,))
+        c.execute("DELETE FROM sms_outbox WHERE guardian_id IN (SELECT id FROM guardians WHERE user_id = ?)",
+                  (user_id,))
         for table in ("notifications", "notification_prefs", "push_devices", "api_sessions",
-                      "claim_codes", "student_accounts", "student_profiles"):
+                      "claim_codes", "student_accounts", "student_profiles", "tasks", "excuse_requests",
+                      "support_tickets", "library_reservations", "guardians"):
             c.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+        c.execute("UPDATE lost_found_items SET reported_by_user = NULL WHERE reported_by_user = ?", (user_id,))
+        c.execute("UPDATE tap_events SET user_id = NULL WHERE user_id = ?", (user_id,))

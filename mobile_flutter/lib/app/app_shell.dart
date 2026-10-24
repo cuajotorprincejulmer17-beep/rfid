@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'app_data.dart';
 import '../core/accessibility/motion_preferences.dart';
 import '../core/theme/pulse_tokens.dart';
 import '../navigation/destination_registry.dart';
@@ -93,6 +94,7 @@ class _PulseShellState extends ConsumerState<PulseShell> {
                 bottom: MediaQuery.paddingOf(context).bottom + kDockBottomInset,
                 child: PulseDock(
                   selectedId: _selectedId(),
+                  unreadCount: ref.watch(unreadCountProvider).value ?? 0,
                   onSelected: (id) => _onTabSelected(
                     dockDestinations.indexWhere((d) => d.id == id),
                   ),

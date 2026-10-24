@@ -27,6 +27,7 @@ class HomePage extends StatelessWidget {
     this.taskTitles = const <String>[],
     this.updateTitles = const <String>[],
     this.showSampleDataChip = true,
+    this.onRefresh,
   });
 
   /// The greeting line, usually the student's name.
@@ -46,6 +47,9 @@ class HomePage extends StatelessWidget {
   /// Whether the sample-data chip should be shown.
   final bool showSampleDataChip;
 
+  /// Pull-to-refresh. Null disables it.
+  final Future<void> Function()? onRefresh;
+
   @override
   Widget build(BuildContext context) {
     final t = context.pulse;
@@ -54,7 +58,8 @@ class HomePage extends StatelessWidget {
       backgroundColor: t.background,
       body: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
+        child: _refreshable(SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(
             PulseSpacing.lg,
             PulseSpacing.lg,
@@ -140,10 +145,14 @@ class HomePage extends StatelessWidget {
                   ),
             ],
           ),
-        ),
+        )),
       ),
     );
   }
+
+  Widget _refreshable(Widget child) => onRefresh == null
+      ? child
+      : RefreshIndicator(onRefresh: onRefresh!, child: child);
 }
 
 /// A quiet line of text where a list would be.
@@ -224,7 +233,7 @@ class _SummaryCardStack extends StatelessWidget {
     final t = context.pulse;
 
     return SizedBox(
-      height: 226,
+      height: 240,
       child: Stack(
         children: [
           // The third card, furthest back.
@@ -239,6 +248,7 @@ class _SummaryCardStack extends StatelessWidget {
                 title: 'Tasks',
                 detail: '$tasksDueToday due today',
                 icon: Icons.task_alt_outlined,
+                topInset: 132,
               ),
             ),
           ),
@@ -255,6 +265,7 @@ class _SummaryCardStack extends StatelessWidget {
                 detail: nextClassTitle ?? 'Nothing scheduled',
                 subtitle: nextClassDetail,
                 icon: Icons.calendar_today_outlined,
+                topInset: 60,
               ),
             ),
           ),
@@ -336,6 +347,7 @@ class _StackCard extends StatelessWidget {
     required this.detail,
     required this.icon,
     this.subtitle,
+    this.topInset = 0,
   });
 
   final String title;
@@ -343,11 +355,24 @@ class _StackCard extends StatelessWidget {
   final IconData icon;
   final String? subtitle;
 
+  /// Pushes the content down into the strip that shows below the card in
+  /// front, so the part a student can see is the part with the text.
+  final double topInset;
+
   @override
   Widget build(BuildContext context) {
     final t = context.pulse;
-    return PulseCard(
+    // An opaque backing: the card fill is translucent glass, and without it
+    // the text of the card behind shows through.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: t.background,
+        borderRadius: BorderRadius.circular(PulseRadius.card),
+      ),
+      child: PulseCard(
       elevated: true,
+      child: Padding(
+      padding: EdgeInsets.only(top: topInset),
       child: Row(
         children: [
           Icon(icon, size: 20, color: t.textSecondary),
@@ -379,6 +404,8 @@ class _StackCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+      ),
       ),
     );
   }

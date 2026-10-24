@@ -30,6 +30,9 @@ abstract final class PrefKeys {
 
   /// The display name the student edited on the Profile page.
   static const String displayName = 'pulse.displayName';
+
+  /// The school server address, e.g. `http://192.168.1.20:5001`.
+  static const String serverUrl = 'pulse.serverUrl';
 }
 
 /// A thin wrapper over [SharedPreferences] so the rest of the app never
