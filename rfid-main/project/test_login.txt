@@ -1,0 +1,7 @@
+PULSE app test login (local test account)
+
+Server address: http://192.168.1.21:5001
+Student number: TEST-0001
+Password:       password123
+
+Card UID on file: TESTCARD0001 (placeholder, not a real card)
