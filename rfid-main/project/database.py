@@ -334,6 +334,20 @@ def open_log_exists(user_id):
     return row is not None
 
 
+def has_open_record(user_id):
+    """True when the user is currently timed in (same open-record rule as record_tap)."""
+    conn = get_conn()
+    try:
+        return conn.execute("""
+            SELECT 1 FROM logs
+            WHERE user_id = ? AND time_out IS NULL
+              AND (flag IS NULL OR flag = 'OVERSTAY')
+            LIMIT 1
+        """, (user_id,)).fetchone() is not None
+    finally:
+        conn.close()
+
+
 def record_tap(uid, limit_hours=None):
     """Apply one tap atomically.
 

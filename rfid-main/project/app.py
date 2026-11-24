@@ -112,8 +112,13 @@ def tap():
     elif code == "TIME_OUT_OK":
         status, action, message = "granted", "OUT", f"Goodbye, {name}!"
     elif code == "REJECT_COOLDOWN":
+        # The cooldown follows a successful tap, so an open record means the card just timed in.
         status, action = "warning", ""
-        message = f"Please wait {cooldown_seconds} seconds before scanning again."
+        current_state = "IN" if db.has_open_record(user["id"]) else "OUT"
+        if current_state == "IN":
+            message = f"Already timed in. Please wait {cooldown_seconds} seconds before tapping out."
+        else:
+            message = f"Already timed out. Please wait {cooldown_seconds} seconds before tapping in again."
     elif code == "ALREADY_CHECKED_IN":
         status, action, message = "warning", "", "Already checked in. Please wait before scanning again."
     elif code == "VISIT_LIMIT_EXCEEDED":
@@ -135,6 +140,8 @@ def tap():
     }
     if cooldown_seconds is not None:
         result["cooldown_seconds"] = cooldown_seconds
+    if code == "REJECT_COOLDOWN":
+        result["current_state"] = current_state  # "IN" or "OUT": what the card is right now
     with capture_lock:
         latest_display_event.update({
             "event_id": latest_display_event["event_id"] + 1,

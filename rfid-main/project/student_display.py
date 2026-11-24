@@ -81,6 +81,7 @@ class StudentDisplay(QWidget):
         self.name = self.action = self.role = ""
         self.message = ""
         self.result = ""
+        self.current_state = ""      # "IN" / "OUT" on a cooldown rejection
         self.t0 = time.monotonic()
         self.state_start = self.t0
         self.server_online = None    # None = unknown yet
@@ -164,6 +165,7 @@ class StudentDisplay(QWidget):
 
     def on_event(self, event):
         self.result = event.get("result", "")
+        self.current_state = event.get("current_state", "")
         self.set_state(event.get("status", "idle"), event.get("name", ""), event.get("action", ""),
                        event.get("role", ""), event.get("message", ""))
 
@@ -432,12 +434,14 @@ class StudentDisplay(QWidget):
             k3 = ease_out_cubic((e - delay) / 0.4)
             return k3, (1 - k3) * 16 * s
 
+        cooldown_title = {"IN": "ALREADY TIMED IN", "OUT": "ALREADY TIMED OUT"}.get(
+            self.current_state, "PLEASE WAIT")
         title = {"granted": "TIME OUT RECORDED" if self.action == "OUT" else "TIME IN RECORDED",
                  "capture_success": "CARD READ SUCCESSFULLY",
                  "registration_success": "SUCCESSFULLY REGISTERED",
                  "card_already_registered": "CARD ALREADY REGISTERED",
                  "capture_failed": "INVALID CARD UID",
-                 "warning": "PLEASE WAIT" if self.result == "REJECT_COOLDOWN"
+                 "warning": cooldown_title if self.result == "REJECT_COOLDOWN"
                  else "ALREADY CHECKED IN"}.get(self.state, "ACCESS DENIED")
         if self.state == "capture_success":
             a, dy = reveal(0.18)
