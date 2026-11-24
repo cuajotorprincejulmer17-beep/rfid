@@ -31,9 +31,9 @@
 #include <time.h>
 
 // ------------------------------------------------------------ configuration
-const char* WIFI_SSID   = "YOUR_WIFI_SSID";            // 2.4 GHz network only
-const char* WIFI_PASS   = "YOUR_WIFI_PASSWORD";
-const char* SERVER_BASE = "http://192.168.1.50:5001";  // the server PC's IPv4 address
+const char* WIFI_SSID   = "Kim Jong-Un Private Wifi_EXT";            // 2.4 GHz network only
+const char* WIFI_PASS   = "ilovenuclear_01";
+const char* SERVER_BASE = "http://192.168.1.26:5001";  // the server PC's IPv4 address
 const char* DEVICE_CODE = "GATE-1";                    // as created in the admin console
 const char* DEVICE_KEY  = "";                          // paste the reader key here; "" = legacy /tap
 const char* FIRMWARE    = "2.0.0";

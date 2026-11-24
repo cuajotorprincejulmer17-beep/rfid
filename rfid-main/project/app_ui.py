@@ -132,16 +132,21 @@ class DataTable:
 
         self.delete_button = None
         self.edit_button = None
+        self.code_button = None
         if kind == "users":
             self.edit_button = app.btn(footer, "Edit student", command=self.edit_selected,
                                        width=112, height=32)
             self.edit_button.grid(row=0, column=1, padx=(0, 8))
             self.edit_button.configure(state="disabled")
+            self.code_button = app.btn(footer, "Activation code", command=self.code_selected,
+                                       width=128, height=32)
+            self.code_button.grid(row=0, column=2, padx=(0, 8))
+            self.code_button.configure(state="disabled")
             self.delete_button = app.btn(footer, "Delete selected", command=self.delete_selected,
                                          kind="danger", width=132, height=32)
-            self.delete_button.grid(row=0, column=2, padx=(0, 12))
+            self.delete_button.grid(row=0, column=3, padx=(0, 12))
             self.delete_button.configure(state="disabled")
-            page_column = 3
+            page_column = 4
         else:
             page_column = 1
         self.previous_button = app.btn(footer, "Previous", command=lambda: self.change_page(-1),
@@ -290,9 +295,16 @@ class DataTable:
         if self.edit_button is not None:
             selected = next((user for user in self.app.users
                              if user["rfid_uid"] == self.selected.get()), None)
-            self.edit_button.configure(
-                state="normal" if selected and selected.get("role") == "student" else "disabled"
-            )
+            is_student = "normal" if selected and selected.get("role") == "student" else "disabled"
+            self.edit_button.configure(state=is_student)
+            if self.code_button is not None:
+                self.code_button.configure(state=is_student)
+
+    def code_selected(self):
+        uid = self.selected.get()
+        user = next((item for item in self.app.users if item["rfid_uid"] == uid), None)
+        if user and user.get("role") == "student":
+            self.app.issue_activation_code(user)
 
     def edit_selected(self):
         uid = self.selected.get()
@@ -1372,8 +1384,150 @@ class RfidApp(ctk.CTk):
             messagebox.showinfo("Card saved", data["message"], parent=self)
             self.clear_form()
             self.refresh_users()
+            saved = next((u for u in self.users if u.get("rfid_uid") == body["uid"]), None)
+            if saved and saved.get("role") == "student" and messagebox.askyesno(
+                    "Mobile app access",
+                    "Issue a mobile app activation code for this student now?\n\n"
+                    "You can also do this later from Registered Cards.", parent=self):
+                self.issue_activation_code(saved)
         else:
             messagebox.showerror("Card not saved", data.get("message", "Please check the card details."), parent=self)
+
+    # ---- mobile app activation codes --------------------------------------------------
+    @staticmethod
+    def admin_key():
+        """The server's ADMIN_API_KEY: from the environment, else .admin_api_key next to this file."""
+        key = os.environ.get("ADMIN_API_KEY", "").strip()
+        if key:
+            return key
+        try:
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".admin_api_key")) as f:
+                return f.read().strip()
+        except OSError:
+            return ""
+
+    def admin_api(self, method, path, body=None):
+        """Call /api/v1/admin/*. Returns (data, error_message)."""
+        key = self.admin_key()
+        if not key:
+            return None, ("No admin key found. Put the server's ADMIN_API_KEY in a file named "
+                          ".admin_api_key next to app_ui.py, or set ADMIN_API_KEY before starting the UI.")
+        server = self.settings["server"].rstrip("/")
+        try:
+            response = requests.request(method, f"{server}/api/v1/admin{path}", json=body, timeout=5,
+                                        headers={"X-Admin-Key": key})
+        except requests.exceptions.RequestException:
+            self.set_server_status(False)
+            return None, "The server did not respond. Check that app.py is running."
+        self.set_server_status(True)
+        try:
+            data = response.json()
+        except ValueError:
+            data = {}
+        if response.ok:
+            return data, None
+        error = data.get("error", {}) if isinstance(data, dict) else {}
+        if response.status_code in (401, 403):
+            return None, "The admin key was rejected. It must match the ADMIN_API_KEY the server was started with."
+        return None, error.get("message") or f"Server error ({response.status_code})."
+
+    def issue_activation_code(self, user):
+        student_number = (user.get("student_number") or "").strip()
+        # The admin search matches the mobile profile's number or the stored name, and a new card has
+        # no profile yet, so try the number, then the surname, then the unfiltered list.
+        student = None
+        for term in (student_number, (user.get("surname") or "").strip(), ""):
+            if term is None or (term == "" and student is not None):
+                continue
+            data, error = self.admin_api("GET", f"/students?q={requests.utils.quote(term)}")
+            if error:
+                messagebox.showerror("Activation code", error, parent=self)
+                return
+            student = next((s for s in data.get("items", []) if s["user_id"] == user["id"]), None)
+            if student is not None:
+                break
+        if student is None:
+            messagebox.showerror("Activation code", "This student was not found on the server.", parent=self)
+            return
+
+        if student["claimed"]:
+            if not messagebox.askyesno(
+                    "Replace mobile app account",
+                    f"{user.get('name')} already has a mobile app account.\n\n"
+                    "Issuing a new code deletes that account and signs them out. They will set a new "
+                    "password when they activate again. Continue?", icon="warning", parent=self):
+                return
+            _, error = self.admin_api("POST", f"/students/{user['id']}/reset-account")
+            if error:
+                messagebox.showerror("Activation code", error, parent=self)
+                return
+
+        if not student["has_profile"]:
+            if not student_number:
+                messagebox.showerror("Activation code",
+                                     "This student has no student number. Students sign in to the app with "
+                                     "their student number, so assign one first.", parent=self)
+                return
+            _, error = self.admin_api("PUT", f"/students/{user['id']}/profile",
+                                      {"student_number": student_number})
+            if error:
+                messagebox.showerror("Activation code", error, parent=self)
+                return
+
+        data, error = self.admin_api("POST", f"/students/{user['id']}/claim-code", {})
+        if error:
+            messagebox.showerror("Activation code", error, parent=self)
+            return
+        self.show_activation_code(user, data)
+
+    def show_activation_code(self, user, data):
+        t = self.t
+        code = data["claim_code"]
+        expires = (data.get("expires_at") or "").replace("T", " ")[:16]
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Activation code")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.geometry("460x400")
+        dialog.resizable(False, False)
+        dialog.grid_columnconfigure(0, weight=1)
+
+        self.label(dialog, "Mobile app activation code", 16, True)\
+            .grid(row=0, column=0, sticky="w", padx=24, pady=(22, 2))
+        self.label(dialog, user.get("name", ""), 11, color=t["muted"])\
+            .grid(row=1, column=0, sticky="w", padx=24)
+
+        box = ctk.CTkFrame(dialog, fg_color=t["entry"], corner_radius=12,
+                           border_width=1, border_color=t["ctrl_border"])
+        box.grid(row=2, column=0, sticky="ew", padx=24, pady=(16, 0))
+        box.grid_columnconfigure(1, weight=1)
+        for row, (label, value, size) in enumerate((("Student number", data.get("student_number", ""), 14),
+                                                     ("Activation code", code, 24))):
+            self.label(box, label, 10, True, t["label"]).grid(row=row, column=0, sticky="w",
+                                                             padx=(16, 12), pady=(14 if row == 0 else 6, 6))
+            ctk.CTkLabel(box, text=value, text_color=t["cyan"] if row else t["text"],
+                         font=ctk.CTkFont(family="Menlo", size=size, weight="bold"))\
+                .grid(row=row, column=1, sticky="w", pady=(14 if row == 0 else 6, 6))
+        ctk.CTkFrame(box, height=8, fg_color="transparent").grid(row=2, column=0)
+
+        steps = ("In the PULSE app, choose Claim account and enter the student number, this code "
+                 "and a new password.\n\n"
+                 f"The code works once and expires {expires or 'in 72 hours'}. Give it to the student "
+                 "in person. It is not shown again; issue a new one if it is lost.")
+        self.label(dialog, steps, 10, color=t["muted"], justify="left", wraplength=410)\
+            .grid(row=3, column=0, sticky="w", padx=24, pady=(14, 0))
+
+        buttons = ctk.CTkFrame(dialog, fg_color="transparent")
+        buttons.grid(row=4, column=0, sticky="e", padx=24, pady=(18, 20))
+
+        def copy():
+            dialog.clipboard_clear()
+            dialog.clipboard_append(code)
+            copy_button.configure(text="Copied")
+
+        copy_button = self.btn(buttons, "Copy code", command=copy, width=110, height=36)
+        copy_button.pack(side="left", padx=(0, 10))
+        self.btn(buttons, "Done", command=dialog.destroy, kind="primary", width=90, height=36).pack(side="left")
 
     def edit_student(self, user):
         dialog = ctk.CTkToplevel(self)
@@ -1429,7 +1583,14 @@ class RfidApp(ctk.CTk):
         if not uid:
             messagebox.showwarning("No card selected", "Select a registered card before deleting.", parent=self)
             return False
-        if not messagebox.askyesno("Delete card", f"Delete card {uid} and its attendance history?", parent=self):
+        user = next((item for item in self.users if item.get("rfid_uid") == uid), None)
+        message = f"Delete card {uid} and its attendance history?"
+        if user and user.get("role") == "student":
+            message += (
+                "\n\nThis also deletes the student's mobile app login. They will be signed out "
+                "and cannot sign in again until a new claim code is issued for their new card."
+            )
+        if not messagebox.askyesno("Delete card", message, icon="warning", parent=self):
             return False
         result = self.api("DELETE", f"/users/{uid}")
         if result is None:
