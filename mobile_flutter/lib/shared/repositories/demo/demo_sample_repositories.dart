@@ -113,6 +113,7 @@ class SampleTaskRepository extends _SampleRepository implements TaskRepository {
       course: task.course,
       due: task.due,
       priority: task.priority,
+      source: TaskSource.personal,
     );
     _tasks.add(created);
     return created;

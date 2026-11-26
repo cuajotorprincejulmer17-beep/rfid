@@ -38,21 +38,21 @@ const List<AppDestination> kDestinations = <AppDestination>[
   ),
   AppDestination(
     id: 'updates',
-    title: 'Updates',
+    title: 'Announcements',
     route: '/updates',
     owner: NavOwner.dock,
     icon: Icons.campaign_outlined,
-    semanticLabel: 'Updates',
+    semanticLabel: 'Announcements',
   ),
 
   // ------------------------------------------------------------- the launcher
   AppDestination(
     id: 'pulse',
-    title: 'Pulse',
+    title: 'PULSE portal',
     route: '',
     owner: NavOwner.launcher,
     icon: Icons.bolt_rounded,
-    semanticLabel: 'Open Pulse menu',
+    semanticLabel: 'Open PULSE portal',
   ),
 
   // -------------------------------------------------------- the fan categories
@@ -331,8 +331,9 @@ final List<AppDestination> dockDestinations = kDestinations
     .toList(growable: false);
 
 /// The launcher. It has no route.
-final AppDestination launcherDestination =
-    kDestinations.firstWhere((d) => d.owner == NavOwner.launcher);
+final AppDestination launcherDestination = kDestinations.firstWhere(
+  (d) => d.owner == NavOwner.launcher,
+);
 
 /// The four category hubs the fan opens.
 final List<AppDestination> fanCategories = kDestinations
@@ -349,7 +350,9 @@ final Map<String, AppDestination> destinationById = <String, AppDestination>{
 /// A category hub renders exactly this list, so a feature can only ever
 /// appear under one parent.
 List<AppDestination> featuresOf(String categoryId) => kDestinations
-    .where((d) => d.owner == NavOwner.categoryFeature && d.parentId == categoryId)
+    .where(
+      (d) => d.owner == NavOwner.categoryFeature && d.parentId == categoryId,
+    )
     .toList(growable: false);
 
 /// Looks a destination up by id, or null when it is not registered.

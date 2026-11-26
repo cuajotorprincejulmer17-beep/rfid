@@ -113,6 +113,28 @@ class PulseTokens extends ThemeExtension<PulseTokens> {
     scrim: Color(0x8014172B),
   );
 
+  /// OLFU Heritage. A warm campus palette built from maroon and green rather
+  /// than a recoloured version of the default purple theme.
+  static const PulseTokens olfu = PulseTokens(
+    background: Color(0xFFF8F8F2),
+    surface: Color(0xFFFFFFFF),
+    surfaceElevated: Color(0xFFFFFEFA),
+    border: Color(0xFFD9DFCF),
+    borderStrong: Color(0xFF71805B),
+    primary: Color(0xFF7A1238),
+    onPrimary: Color(0xFFFFFFFF),
+    glow: Color(0xFFA4154B),
+    accentCyan: Color(0xFF167548),
+    textPrimary: Color(0xFF24131A),
+    textSecondary: Color(0xFF62555A),
+    success: Color(0xFF167548),
+    warning: Color(0xFF9A5B00),
+    error: Color(0xFFB3261E),
+    navSelected: Color(0xFF7A1238),
+    navUnselected: Color(0xFF66625E),
+    scrim: Color(0x8024131A),
+  );
+
   @override
   PulseTokens copyWith({
     Color? background,
@@ -201,28 +223,31 @@ class PulseTokens extends ThemeExtension<PulseTokens> {
 }
 
 /// The three named themes.
-enum PulseThemeName { dark, mono, light }
+enum PulseThemeName { dark, mono, light, olfu }
 
 extension PulseThemeNameX on PulseThemeName {
   /// The name shown in the Appearance page.
   String get label => switch (this) {
-        PulseThemeName.dark => 'Pulse Purple Dark',
-        PulseThemeName.mono => 'Mono',
-        PulseThemeName.light => 'Light',
-      };
+    PulseThemeName.dark => 'Pulse Purple Dark',
+    PulseThemeName.mono => 'Mono',
+    PulseThemeName.light => 'Light',
+    PulseThemeName.olfu => 'OLFU Heritage',
+  };
 
   /// The short name used in golden file names.
   String get shortLabel => switch (this) {
-        PulseThemeName.dark => 'Dark',
-        PulseThemeName.mono => 'Mono',
-        PulseThemeName.light => 'Light',
-      };
+    PulseThemeName.dark => 'Dark',
+    PulseThemeName.mono => 'Mono',
+    PulseThemeName.light => 'Light',
+    PulseThemeName.olfu => 'OLFU',
+  };
 
   PulseTokens get tokens => switch (this) {
-        PulseThemeName.dark => PulseTokens.dark,
-        PulseThemeName.mono => PulseTokens.mono,
-        PulseThemeName.light => PulseTokens.light,
-      };
+    PulseThemeName.dark => PulseTokens.dark,
+    PulseThemeName.mono => PulseTokens.mono,
+    PulseThemeName.light => PulseTokens.light,
+    PulseThemeName.olfu => PulseTokens.olfu,
+  };
 }
 
 /// The three palettes.

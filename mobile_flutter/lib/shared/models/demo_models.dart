@@ -52,6 +52,17 @@ class ScheduleEvent {
 /// Where an event is in its life.
 enum EventStatus { upcoming, now, done }
 
+/// Whether an item came from a professor or was created by the student.
+///
+/// Personal reminders are intentionally never treated as reward-eligible.
+enum TaskSource {
+  professor,
+  personal;
+
+  static TaskSource fromApi(String value) =>
+      value == 'assignment' ? TaskSource.professor : TaskSource.personal;
+}
+
 /// A task the student has to do.
 @immutable
 class PulseTask {
@@ -62,6 +73,7 @@ class PulseTask {
     required this.due,
     required this.priority,
     this.completed = false,
+    this.source = TaskSource.personal,
   });
 
   final String id;
@@ -72,16 +84,24 @@ class PulseTask {
   /// `high`, `medium` or `low`.
   final String priority;
   final bool completed;
+  final TaskSource source;
 
-  PulseTask copyWith({bool? completed, String? title, String? course, DateTime? due, String? priority}) =>
-      PulseTask(
-        id: id,
-        title: title ?? this.title,
-        course: course ?? this.course,
-        due: due ?? this.due,
-        priority: priority ?? this.priority,
-        completed: completed ?? this.completed,
-      );
+  PulseTask copyWith({
+    bool? completed,
+    String? title,
+    String? course,
+    DateTime? due,
+    String? priority,
+    TaskSource? source,
+  }) => PulseTask(
+    id: id,
+    title: title ?? this.title,
+    course: course ?? this.course,
+    due: due ?? this.due,
+    priority: priority ?? this.priority,
+    completed: completed ?? this.completed,
+    source: source ?? this.source,
+  );
 
   @override
   bool operator ==(Object other) => other is PulseTask && other.id == id;
@@ -114,14 +134,14 @@ class UpdateItem {
   final bool saved;
 
   UpdateItem copyWith({bool? read, bool? saved}) => UpdateItem(
-        id: id,
-        title: title,
-        body: body,
-        category: category,
-        publishedAt: publishedAt,
-        read: read ?? this.read,
-        saved: saved ?? this.saved,
-      );
+    id: id,
+    title: title,
+    body: body,
+    category: category,
+    publishedAt: publishedAt,
+    read: read ?? this.read,
+    saved: saved ?? this.saved,
+  );
 
   @override
   bool operator ==(Object other) => other is UpdateItem && other.id == id;
@@ -190,13 +210,13 @@ class LostFoundItem {
   final bool claimed;
 
   LostFoundItem copyWith({bool? claimed}) => LostFoundItem(
-        id: id,
-        name: name,
-        category: category,
-        location: location,
-        reportedAt: reportedAt,
-        claimed: claimed ?? this.claimed,
-      );
+    id: id,
+    name: name,
+    category: category,
+    location: location,
+    reportedAt: reportedAt,
+    claimed: claimed ?? this.claimed,
+  );
 }
 
 /// A library item.

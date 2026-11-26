@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'app/pulse_app.dart';
 import 'app/session.dart';
@@ -8,10 +12,14 @@ import 'core/api/api_client.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/auth/token_store.dart';
 import 'core/storage/preferences_store.dart';
+import 'core/notifications/pulse_notification_service.dart';
+import 'firebase_options.dart';
 import 'features/splash/pulse_splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  FirebaseMessaging.onBackgroundMessage(pulseFirebaseBackgroundHandler);
 
   final preferences = await PreferencesStore.open();
   final tokenStore = SecureTokenStore();
@@ -30,6 +38,17 @@ Future<void> main() async {
   api.onSessionExpired = auth.onSessionExpired;
 
   await auth.restore();
+
+  final notifications = PulseNotificationService();
+  await notifications.initialize();
+  void registerPushForSignedInStudent() {
+    if (auth.isSignedIn) {
+      unawaited(notifications.registerCurrentDevice(api));
+    }
+  }
+
+  auth.addListener(registerPushForSignedInStudent);
+  registerPushForSignedInStudent();
 
   runApp(
     PulseProviderScope(

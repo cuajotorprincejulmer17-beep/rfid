@@ -9,143 +9,193 @@ import '../../shared/widgets/pulse_page.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/status_pill.dart';
 
-/// The Home page.
-///
-/// It has no top-corner controls. From the top: a greeting, a stack of
-/// three overlapping summary cards, four circular quick actions, upcoming
-/// tasks, latest updates, and the sample-data chip.
+/// The student home: a truthful RFID status, a ready-for-server PULSE card,
+/// professor activities, and personal reminders.
 class HomePage extends StatelessWidget {
   const HomePage({
     super.key,
     required this.greeting,
     this.subtitle = 'Your campus. In sync.',
-    this.attendanceStatus,
-    this.attendanceLabel = 'Attendance',
+    this.rfidState,
+    this.lastRfidScan,
     this.nextClassTitle,
     this.nextClassDetail,
-    this.tasksDueToday = 0,
-    this.taskTitles = const <String>[],
+    this.professorActivityTitles = const <String>[],
+    this.personalReminderTitles = const <String>[],
     this.updateTitles = const <String>[],
     this.showSampleDataChip = true,
     this.onRefresh,
   });
 
-  /// The greeting line, usually the student's name.
   final String greeting;
   final String subtitle;
 
-  /// The real attendance status, when it is known.
-  final StatusTone? attendanceStatus;
-  final String attendanceLabel;
-
+  /// `in`, `out`, `not_in`, or null when the server has not answered.
+  final String? rfidState;
+  final DateTime? lastRfidScan;
   final String? nextClassTitle;
   final String? nextClassDetail;
-  final int tasksDueToday;
-  final List<String> taskTitles;
+  final List<String> professorActivityTitles;
+  final List<String> personalReminderTitles;
   final List<String> updateTitles;
-
-  /// Whether the sample-data chip should be shown.
   final bool showSampleDataChip;
-
-  /// Pull-to-refresh. Null disables it.
   final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final t = context.pulse;
-
     return Scaffold(
       backgroundColor: t.background,
       body: SafeArea(
         bottom: false,
-        child: _refreshable(SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(
-            PulseSpacing.lg,
-            PulseSpacing.lg,
-            PulseSpacing.lg,
-            PulseSpacing.lg,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // The greeting. No controls sit in the top corners.
-              Text(
-                greeting,
-                style: PulseType.title.copyWith(color: t.textPrimary),
-              ),
-              const SizedBox(height: PulseSpacing.xs),
-              Text(
-                subtitle,
-                style: PulseType.body.copyWith(color: t.textSecondary),
-              ),
-              if (showSampleDataChip) ...[
+        child: _refreshable(
+          SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(PulseSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: t.success.withValues(alpha: 0.13),
+                        border: Border.all(
+                          color: t.success.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Icon(Icons.eco_outlined, color: t.success),
+                    ),
+                    const SizedBox(width: PulseSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'OLFU PULSE',
+                            style: PulseType.label.copyWith(
+                              color: t.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            'Student verified wins',
+                            style: PulseType.caption.copyWith(
+                              color: t.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.account_circle_outlined, color: t.textSecondary),
+                  ],
+                ),
+                const SizedBox(height: PulseSpacing.xl),
+                Text(
+                  greeting,
+                  style: PulseType.title.copyWith(color: t.textPrimary),
+                ),
+                const SizedBox(height: PulseSpacing.xs),
+                Text(
+                  subtitle,
+                  style: PulseType.body.copyWith(color: t.textSecondary),
+                ),
+                if (showSampleDataChip) ...[
+                  const SizedBox(height: PulseSpacing.md),
+                  const SampleDataChip(),
+                ],
+                const SizedBox(height: PulseSpacing.lg),
+                _RfidStatusCard(state: rfidState, lastScan: lastRfidScan),
                 const SizedBox(height: PulseSpacing.md),
-                const SampleDataChip(),
+                const _PulseProgressCard(),
+                const SizedBox(height: PulseSpacing.xl),
+                const _QuickActionsRow(),
+                const SizedBox(height: PulseSpacing.xl),
+                if (nextClassTitle != null) ...[
+                  const SectionHeader(title: 'Next on your schedule'),
+                  const SizedBox(height: PulseSpacing.md),
+                  _ListRow(
+                    icon: Icons.calendar_today_outlined,
+                    eyebrow: nextClassDetail ?? 'Scheduled class',
+                    title: nextClassTitle!,
+                    onTap: () =>
+                        context.push(lookupDestination('schedule')!.route),
+                  ),
+                  const SizedBox(height: PulseSpacing.xl),
+                ],
+                SectionHeader(
+                  title: 'Professor activities',
+                  actionLabel: 'View all',
+                  onAction: () =>
+                      context.push(lookupDestination('tasks')!.route),
+                ),
+                const SizedBox(height: PulseSpacing.md),
+                if (professorActivityTitles.isEmpty)
+                  const _QuietNote(
+                    text: 'Your professor’s activities will appear here.',
+                  )
+                else
+                  for (final title in professorActivityTitles.take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: PulseSpacing.sm),
+                      child: _ListRow(
+                        icon: Icons.school_outlined,
+                        eyebrow: 'Professor activity · verification required',
+                        title: title,
+                        onTap: () =>
+                            context.push(lookupDestination('tasks')!.route),
+                      ),
+                    ),
+                const SizedBox(height: PulseSpacing.lg),
+                SectionHeader(
+                  title: 'My reminders',
+                  actionLabel: 'View all',
+                  onAction: () =>
+                      context.push(lookupDestination('tasks')!.route),
+                ),
+                const SizedBox(height: PulseSpacing.md),
+                if (personalReminderTitles.isEmpty)
+                  const _QuietNote(text: 'No personal reminders yet.')
+                else
+                  for (final title in personalReminderTitles.take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: PulseSpacing.sm),
+                      child: _ListRow(
+                        icon: Icons.bookmark_outline,
+                        eyebrow: 'Personal reminder · no PULSE points',
+                        title: title,
+                        onTap: () =>
+                            context.push(lookupDestination('tasks')!.route),
+                      ),
+                    ),
+                const SizedBox(height: PulseSpacing.lg),
+                SectionHeader(
+                  title: 'Announcements',
+                  actionLabel: 'View all',
+                  onAction: () =>
+                      context.push(lookupDestination('updates')!.route),
+                ),
+                const SizedBox(height: PulseSpacing.md),
+                if (updateTitles.isEmpty)
+                  const _QuietNote(text: 'Nothing new right now.')
+                else
+                  for (final title in updateTitles.take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: PulseSpacing.sm),
+                      child: _ListRow(
+                        icon: Icons.campaign_outlined,
+                        eyebrow: 'Campus announcement',
+                        title: title,
+                        onTap: () =>
+                            context.push(lookupDestination('updates')!.route),
+                      ),
+                    ),
               ],
-
-              const SizedBox(height: PulseSpacing.lg),
-
-              // The stack of three overlapping summary cards.
-              _SummaryCardStack(
-                attendanceStatus: attendanceStatus,
-                attendanceLabel: attendanceLabel,
-                nextClassTitle: nextClassTitle,
-                nextClassDetail: nextClassDetail,
-                tasksDueToday: tasksDueToday,
-              ),
-
-              const SizedBox(height: PulseSpacing.xl),
-
-              // Four circular quick actions, each a deep link.
-              const _QuickActionsRow(),
-
-              const SizedBox(height: PulseSpacing.xl),
-
-              SectionHeader(
-                title: 'Upcoming tasks',
-                actionLabel: 'View all',
-                onAction: () => context.push(lookupDestination('tasks')!.route),
-              ),
-              const SizedBox(height: PulseSpacing.md),
-              if (taskTitles.isEmpty)
-                _QuietNote(text: 'No tasks yet. Add one from the Tasks tab.')
-              else
-                for (final title in taskTitles.take(3))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: PulseSpacing.sm),
-                    child: _ListRow(
-                      icon: Icons.task_alt_outlined,
-                      title: title,
-                      onTap: () => context.push(lookupDestination('tasks')!.route),
-                    ),
-                  ),
-
-              const SizedBox(height: PulseSpacing.lg),
-
-              SectionHeader(
-                title: 'Latest updates',
-                actionLabel: 'View all',
-                onAction: () =>
-                    context.push(lookupDestination('updates')!.route),
-              ),
-              const SizedBox(height: PulseSpacing.md),
-              if (updateTitles.isEmpty)
-                _QuietNote(text: 'Nothing new right now.')
-              else
-                for (final title in updateTitles.take(3))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: PulseSpacing.sm),
-                    child: _ListRow(
-                      icon: Icons.campaign_outlined,
-                      title: title,
-                      onTap: () =>
-                          context.push(lookupDestination('updates')!.route),
-                    ),
-                  ),
-            ],
+            ),
           ),
-        )),
+        ),
       ),
     );
   }
@@ -155,31 +205,209 @@ class HomePage extends StatelessWidget {
       : RefreshIndicator(onRefresh: onRefresh!, child: child);
 }
 
-/// A quiet line of text where a list would be.
-class _QuietNote extends StatelessWidget {
-  const _QuietNote({required this.text});
+class _RfidStatusCard extends StatelessWidget {
+  const _RfidStatusCard({required this.state, required this.lastScan});
 
-  final String text;
+  final String? state;
+  final DateTime? lastScan;
 
   @override
   Widget build(BuildContext context) {
     final t = context.pulse;
-    return Text(
-      text,
-      style: PulseType.body.copyWith(color: t.textSecondary),
+    final (label, tone, icon) = switch (state) {
+      'in' => ('IN', StatusTone.success, Icons.login_rounded),
+      'out' => ('OUT', StatusTone.neutral, Icons.logout_rounded),
+      'not_in' => (
+        'NOT SCANNED',
+        StatusTone.warning,
+        Icons.credit_card_off_outlined,
+      ),
+      _ => ('UNKNOWN', StatusTone.neutral, Icons.wifi_off_outlined),
+    };
+    final detail = lastScan == null
+        ? state == null
+              ? 'The school server has not reported a scan status.'
+              : 'No RFID scan has been reported today.'
+        : 'Last RFID scan · ${_clock(lastScan!)}';
+    return PulseCard(
+      featured: true,
+      onTap: () => context.push(lookupDestination('attendance')!.route),
+      semanticLabel: 'RFID status $label. Open attendance.',
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: t.softFill,
+              border: Border.all(color: t.primary.withValues(alpha: 0.45)),
+            ),
+            child: Icon(Icons.contactless_outlined, color: t.navSelected),
+          ),
+          const SizedBox(width: PulseSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'RFID status',
+                  style: PulseType.label.copyWith(color: t.textSecondary),
+                ),
+                const SizedBox(height: PulseSpacing.xs),
+                Text(
+                  detail,
+                  style: PulseType.caption.copyWith(color: t.textPrimary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: PulseSpacing.sm),
+          Column(
+            children: [
+              Icon(icon, size: 18, color: _toneColor(t, tone)),
+              const SizedBox(height: PulseSpacing.xs),
+              StatusPill(label: label, tone: tone),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Color _toneColor(PulseTokens t, StatusTone tone) => switch (tone) {
+    StatusTone.success => t.success,
+    StatusTone.warning => t.warning,
+    StatusTone.danger => t.error,
+    StatusTone.info => t.accentCyan,
+    StatusTone.neutral => t.textSecondary,
+  };
+
+  static String _clock(DateTime value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+}
+
+/// A deliberately zero-state rewards card until the school exposes verified
+/// reward totals. The app must never calculate points from a self-checked box.
+class _PulseProgressCard extends StatelessWidget {
+  const _PulseProgressCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.pulse;
+    return Container(
+      padding: const EdgeInsets.all(PulseSpacing.lg),
+      decoration: BoxDecoration(
+        color: t.success,
+        borderRadius: BorderRadius.circular(PulseRadius.card + 4),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -44,
+            bottom: -68,
+            child: Container(
+              width: 190,
+              height: 190,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.17),
+                  width: 26,
+                ),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Your verified PULSE',
+                      style: PulseType.label.copyWith(color: Colors.white),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: PulseSpacing.sm,
+                      vertical: PulseSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(PulseRadius.pill),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.45),
+                      ),
+                    ),
+                    child: Text(
+                      'Campus Explorer',
+                      style: PulseType.caption.copyWith(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: PulseSpacing.md),
+              Text(
+                '0 PULSE',
+                style: PulseType.title.copyWith(
+                  color: Colors.white,
+                  fontSize: 28,
+                ),
+              ),
+              const SizedBox(height: PulseSpacing.xs),
+              Text(
+                'RFID scans and professor approvals count. Personal reminders do not.',
+                style: PulseType.caption.copyWith(
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+              const SizedBox(height: PulseSpacing.md),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(PulseRadius.pill),
+                child: LinearProgressIndicator(
+                  value: 0,
+                  minHeight: 8,
+                  color: const Color(0xFFFFD567),
+                  backgroundColor: Colors.white.withValues(alpha: 0.28),
+                ),
+              ),
+              const SizedBox(height: PulseSpacing.xs),
+              Text(
+                'Reward rules will appear when your school enables them.',
+                style: PulseType.caption.copyWith(
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// One row in a list on Home.
+class _QuietNote extends StatelessWidget {
+  const _QuietNote({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: PulseType.body.copyWith(color: context.pulse.textSecondary),
+  );
+}
+
 class _ListRow extends StatelessWidget {
   const _ListRow({
     required this.icon,
+    required this.eyebrow,
     required this.title,
     required this.onTap,
   });
 
   final IconData icon;
+  final String eyebrow;
   final String title;
   final VoidCallback onTap;
 
@@ -191,14 +419,34 @@ class _ListRow extends StatelessWidget {
       padding: const EdgeInsets.all(PulseSpacing.md),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: t.textSecondary),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: t.softFill,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: t.navSelected),
+          ),
           const SizedBox(width: PulseSpacing.md),
           Expanded(
-            child: Text(
-              title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: PulseType.body.copyWith(color: t.textPrimary),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: PulseType.body.copyWith(color: t.textPrimary),
+                ),
+                const SizedBox(height: PulseSpacing.xs),
+                Text(
+                  eyebrow,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: PulseType.caption.copyWith(color: t.textSecondary),
+                ),
+              ],
             ),
           ),
           Icon(Icons.chevron_right_rounded, size: 20, color: t.textSecondary),
@@ -208,210 +456,6 @@ class _ListRow extends StatelessWidget {
   }
 }
 
-/// The stack of three overlapping summary cards.
-///
-/// Attendance is the front card and is the only card that glows. The stack
-/// compresses as the page scrolls, driven by the scroll position rather
-/// than by a timed animation.
-class _SummaryCardStack extends StatelessWidget {
-  const _SummaryCardStack({
-    required this.attendanceStatus,
-    required this.attendanceLabel,
-    required this.nextClassTitle,
-    required this.nextClassDetail,
-    required this.tasksDueToday,
-  });
-
-  final StatusTone? attendanceStatus;
-  final String attendanceLabel;
-  final String? nextClassTitle;
-  final String? nextClassDetail;
-  final int tasksDueToday;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.pulse;
-
-    return SizedBox(
-      height: 240,
-      child: Stack(
-        children: [
-          // The third card, furthest back.
-          Positioned(
-            left: 24,
-            right: 24,
-            top: 48,
-            child: Transform.scale(
-              scale: 0.88,
-              alignment: Alignment.topCenter,
-              child: _StackCard(
-                title: 'Tasks',
-                detail: '$tasksDueToday due today',
-                icon: Icons.task_alt_outlined,
-                topInset: 132,
-              ),
-            ),
-          ),
-          // The second card.
-          Positioned(
-            left: 12,
-            right: 12,
-            top: 24,
-            child: Transform.scale(
-              scale: 0.94,
-              alignment: Alignment.topCenter,
-              child: _StackCard(
-                title: 'Next class',
-                detail: nextClassTitle ?? 'Nothing scheduled',
-                subtitle: nextClassDetail,
-                icon: Icons.calendar_today_outlined,
-                topInset: 60,
-              ),
-            ),
-          ),
-          // The front card, the single glowing element.
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: PulseCard(
-              featured: true,
-              onTap: () =>
-                  context.push(lookupDestination('attendance')!.route),
-              semanticLabel: '$attendanceLabel. Open attendance.',
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: t.softFill,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: t.primary.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.credit_card_outlined,
-                      size: 22,
-                      color: t.navSelected,
-                    ),
-                  ),
-                  const SizedBox(width: PulseSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          attendanceLabel,
-                          style: PulseType.label
-                              .copyWith(color: t.textSecondary),
-                        ),
-                        const SizedBox(height: PulseSpacing.xs),
-                        Text(
-                          'Your attendance',
-                          style: PulseType.heading
-                              .copyWith(color: t.textPrimary),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (attendanceStatus != null)
-                    StatusPill(
-                      label: _statusLabel(attendanceStatus!),
-                      tone: attendanceStatus!,
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _statusLabel(StatusTone tone) => switch (tone) {
-        StatusTone.success => 'Recorded',
-        StatusTone.warning => 'Pending',
-        StatusTone.danger => 'Missing',
-        StatusTone.info => 'In',
-        StatusTone.neutral => 'Unknown',
-      };
-}
-
-/// A card in the summary stack, behind the front card.
-class _StackCard extends StatelessWidget {
-  const _StackCard({
-    required this.title,
-    required this.detail,
-    required this.icon,
-    this.subtitle,
-    this.topInset = 0,
-  });
-
-  final String title;
-  final String detail;
-  final IconData icon;
-  final String? subtitle;
-
-  /// Pushes the content down into the strip that shows below the card in
-  /// front, so the part a student can see is the part with the text.
-  final double topInset;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.pulse;
-    // An opaque backing: the card fill is translucent glass, and without it
-    // the text of the card behind shows through.
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: t.background,
-        borderRadius: BorderRadius.circular(PulseRadius.card),
-      ),
-      child: PulseCard(
-      elevated: true,
-      child: Padding(
-      padding: EdgeInsets.only(top: topInset),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: t.textSecondary),
-          const SizedBox(width: PulseSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: PulseType.label.copyWith(color: t.textSecondary),
-                ),
-                const SizedBox(height: PulseSpacing.xs),
-                Text(
-                  detail,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: PulseType.body.copyWith(color: t.textPrimary),
-                ),
-                if (subtitle != null)
-                  Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: PulseType.caption.copyWith(color: t.textSecondary),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      ),
-      ),
-    );
-  }
-}
-
-/// The four circular quick actions.
 class _QuickActionsRow extends StatelessWidget {
   const _QuickActionsRow();
 
@@ -419,27 +463,21 @@ class _QuickActionsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final actions = <(String, IconData, String)>[
       (
-        'Scan',
-        Icons.credit_card_outlined,
+        'Attendance',
+        Icons.contactless_outlined,
         lookupDestination('attendance')!.route,
+      ),
+      (
+        'Schedule',
+        Icons.calendar_today_outlined,
+        lookupDestination('schedule')!.route,
       ),
       (
         'Digital ID',
         Icons.badge_outlined,
         lookupDestination('digital-id')!.route,
       ),
-      (
-        'Find room',
-        Icons.meeting_room_outlined,
-        lookupDestination('rooms')!.route,
-      ),
-      (
-        'Report lost',
-        Icons.inventory_2_outlined,
-        lookupDestination('lost-found')!.route,
-      ),
     ];
-
     return Row(
       children: [
         for (final (label, icon, route) in actions)
@@ -455,14 +493,12 @@ class _QuickActionsRow extends StatelessWidget {
   }
 }
 
-/// One circular quick action.
 class _QuickAction extends StatelessWidget {
   const _QuickAction({
     required this.label,
     required this.icon,
     required this.onTap,
   });
-
   final String label;
   final IconData icon;
   final VoidCallback onTap;

@@ -42,7 +42,7 @@ class PulseLauncher extends StatelessWidget {
     return PressableScale(
       key: kPulseLauncherKey,
       onPressed: onPressed,
-      semanticLabel: open ? 'Close Pulse menu' : 'Open Pulse menu',
+      semanticLabel: open ? 'Close PULSE portal' : 'Open PULSE portal',
       excludeSemantics: true,
       pressedScale: PulseMotion.launcherPressedScale,
       haptic: haptics,
@@ -71,10 +71,7 @@ class PulseLauncher extends StatelessWidget {
               switchOutCurve: Curves.easeIn,
               transitionBuilder: (child, animation) => FadeTransition(
                 opacity: animation,
-                child: ScaleTransition(
-                  scale: animation,
-                  child: child,
-                ),
+                child: ScaleTransition(scale: animation, child: child),
               ),
               child: open
                   ? Icon(

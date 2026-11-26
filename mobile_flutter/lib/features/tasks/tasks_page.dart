@@ -8,17 +8,15 @@ import '../../shared/models/demo_models.dart';
 import '../../shared/widgets/pulse_button.dart';
 import '../../shared/widgets/pulse_card.dart';
 import '../../shared/widgets/pulse_chip.dart';
-import '../../shared/widgets/pulse_text_field.dart';
 import '../../shared/widgets/pulse_sheet.dart';
+import '../../shared/widgets/pulse_text_field.dart';
+import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/status_pill.dart';
 
-/// The filter applied to the task list.
-enum TaskFilter { all, dueSoon, completed }
-
-/// The Tasks page.
+/// Professor-assigned activities and private student reminders.
 ///
-/// The only control is the filter row and the "Add task" action, which
-/// opens the sheet pattern. There is no floating action button.
+/// The two are intentionally separate: only the school can create an
+/// activity, and completion in this screen never grants a reward by itself.
 class TasksPage extends StatelessWidget {
   const TasksPage({
     super.key,
@@ -34,25 +32,20 @@ class TasksPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.pulse;
-    final now = DateTime.now();
-    final soon = now.add(const Duration(days: 2));
-
-    final visible = tasks.where((task) {
-      if (task.completed) return true;
-      return true;
-    }).toList();
+    final soon = DateTime.now().add(const Duration(days: 2));
+    final activities = tasks
+        .where((task) => task.source == TaskSource.professor)
+        .toList();
+    final reminders = tasks
+        .where((task) => task.source == TaskSource.personal)
+        .toList();
 
     return Scaffold(
       backgroundColor: t.background,
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            PulseSpacing.lg,
-            PulseSpacing.lg,
-            PulseSpacing.lg,
-            PulseSpacing.lg,
-          ),
+          padding: const EdgeInsets.all(PulseSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -60,12 +53,12 @@ class TasksPage extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Tasks',
+                      'Activities',
                       style: PulseType.title.copyWith(color: t.textPrimary),
                     ),
                   ),
                   PulseButton(
-                    label: 'Add task',
+                    label: 'Add reminder',
                     icon: Icons.add_rounded,
                     variant: PulseButtonVariant.secondary,
                     expanded: false,
@@ -75,33 +68,55 @@ class TasksPage extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: PulseSpacing.xs),
+              Text(
+                'Keep school activities and your own reminders distinct.',
+                style: PulseType.body.copyWith(color: t.textSecondary),
+              ),
               const SizedBox(height: PulseSpacing.lg),
-
-              if (visible.isEmpty)
-                PulseCard(
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.checklist_outlined,
-                        size: 28,
-                        color: t.textSecondary,
-                      ),
-                      const SizedBox(height: PulseSpacing.sm),
-                      Text(
-                        'No tasks yet',
-                        style: PulseType.label.copyWith(color: t.textPrimary),
-                      ),
-                      const SizedBox(height: PulseSpacing.xs),
-                      Text(
-                        'Add a task to keep track of what is due.',
-                        textAlign: TextAlign.center,
-                        style: PulseType.caption.copyWith(color: t.textSecondary),
-                      ),
-                    ],
-                  ),
+              const _VerificationNote(),
+              const SizedBox(height: PulseSpacing.xl),
+              const SectionHeader(title: 'Professor activities'),
+              const SizedBox(height: PulseSpacing.xs),
+              Text(
+                'Created by your professor or school. PULSE is awarded only after the school verifies it.',
+                style: PulseType.caption.copyWith(color: t.textSecondary),
+              ),
+              const SizedBox(height: PulseSpacing.md),
+              if (activities.isEmpty)
+                const _EmptyGroup(
+                  icon: Icons.school_outlined,
+                  title: 'No professor activities yet',
+                  detail: 'New activities will appear here when they are assigned to you.',
                 )
               else
-                for (final task in visible)
+                for (final task in activities)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: PulseSpacing.md),
+                    child: _TaskCard(
+                      task: task,
+                      soon: task.due.isBefore(soon),
+                      onToggle: onToggleComplete == null
+                          ? null
+                          : () => onToggleComplete!(task, !task.completed),
+                    ),
+                  ),
+              const SizedBox(height: PulseSpacing.xl),
+              const SectionHeader(title: 'My reminders'),
+              const SizedBox(height: PulseSpacing.xs),
+              Text(
+                'Private reminders you create for yourself. They never earn PULSE.',
+                style: PulseType.caption.copyWith(color: t.textSecondary),
+              ),
+              const SizedBox(height: PulseSpacing.md),
+              if (reminders.isEmpty)
+                const _EmptyGroup(
+                  icon: Icons.bookmark_add_outlined,
+                  title: 'No reminders yet',
+                  detail: 'Add one for anything you want to remember.',
+                )
+              else
+                for (final task in reminders)
                   Padding(
                     padding: const EdgeInsets.only(bottom: PulseSpacing.md),
                     child: _TaskCard(
@@ -124,19 +139,83 @@ class TasksPage extends StatelessWidget {
       context: context,
       builder: (context) => const AddTaskSheet(),
     );
-    if (created != null && onAddTask != null) {
-      await onAddTask!(created);
-    }
+    if (created != null && onAddTask != null) await onAddTask!(created);
   }
 }
 
-/// One task in the list.
-class _TaskCard extends StatelessWidget {
-  const _TaskCard({
-    required this.task,
-    required this.soon,
-    this.onToggle,
+class _VerificationNote extends StatelessWidget {
+  const _VerificationNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.pulse;
+    return Container(
+      padding: const EdgeInsets.all(PulseSpacing.md),
+      decoration: BoxDecoration(
+        color: t.success.withValues(alpha: t.isLight ? 0.11 : 0.16),
+        borderRadius: BorderRadius.circular(PulseRadius.card),
+        border: Border.all(color: t.success.withValues(alpha: 0.32)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.verified_user_outlined, color: t.success),
+          const SizedBox(width: PulseSpacing.md),
+          Expanded(
+            child: Text(
+              'PULSE is verification-based: only an RFID record or a professor-approved activity can count. Completing a personal reminder cannot add points.',
+              style: PulseType.caption.copyWith(color: t.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyGroup extends StatelessWidget {
+  const _EmptyGroup({
+    required this.icon,
+    required this.title,
+    required this.detail,
   });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.pulse;
+    return PulseCard(
+      child: Row(
+        children: [
+          Icon(icon, color: t.textSecondary),
+          const SizedBox(width: PulseSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: PulseType.label.copyWith(color: t.textPrimary),
+                ),
+                const SizedBox(height: PulseSpacing.xs),
+                Text(
+                  detail,
+                  style: PulseType.caption.copyWith(color: t.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskCard extends StatelessWidget {
+  const _TaskCard({required this.task, required this.soon, this.onToggle});
 
   final PulseTask task;
   final bool soon;
@@ -145,8 +224,11 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.pulse;
-
-    final (String label, StatusTone tone) = switch (task.priority) {
+    final isActivity = task.source == TaskSource.professor;
+    final (
+      String priorityLabel,
+      StatusTone priorityTone,
+    ) = switch (task.priority) {
       'high' => ('High', StatusTone.danger),
       'medium' => ('Medium', StatusTone.warning),
       _ => ('Low', StatusTone.neutral),
@@ -157,11 +239,16 @@ class _TaskCard extends StatelessWidget {
         lookupDestination('task-detail')!.route.replaceFirst(':id', task.id),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Semantics(
             button: true,
             checked: task.completed,
-            label: task.completed ? 'Mark as not done' : 'Mark as done',
+            label: task.completed
+                ? 'Mark as not done'
+                : isActivity
+                ? 'Mark activity as ready for review'
+                : 'Mark reminder as done',
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onToggle,
@@ -186,26 +273,65 @@ class _TaskCard extends StatelessWidget {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
+                Row(
+                  children: [
+                    Icon(
+                      isActivity
+                          ? Icons.school_outlined
+                          : Icons.bookmark_outline,
+                      size: 15,
+                      color: isActivity ? t.success : t.textSecondary,
+                    ),
+                    const SizedBox(width: PulseSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        isActivity ? 'Professor activity' : 'Personal reminder',
+                        style: PulseType.caption.copyWith(
+                          color: isActivity ? t.success : t.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: PulseSpacing.xs),
                 Text(
                   task.title,
                   style: PulseType.body.copyWith(
                     color: task.completed ? t.textSecondary : t.textPrimary,
-                    decoration:
-                        task.completed ? TextDecoration.lineThrough : null,
+                    decoration: task.completed
+                        ? TextDecoration.lineThrough
+                        : null,
                   ),
                 ),
                 const SizedBox(height: PulseSpacing.xs),
                 Text(
-                  '${task.course} - due ${_dueLabel(task.due)}',
+                  '${task.course} · due ${_dueLabel(task.due)}',
                   style: PulseType.caption.copyWith(color: t.textSecondary),
                 ),
+                if (isActivity) ...[
+                  const SizedBox(height: PulseSpacing.xs),
+                  Text(
+                    task.completed
+                        ? 'Marked ready — PULSE waits for faculty approval.'
+                        : 'PULSE can be awarded only after faculty approval.',
+                    style: PulseType.caption.copyWith(color: t.textSecondary),
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(width: PulseSpacing.md),
-          StatusPill(label: label, tone: tone),
+          const SizedBox(width: PulseSpacing.sm),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              StatusPill(label: priorityLabel, tone: priorityTone),
+              if (soon && !task.completed) ...[
+                const SizedBox(height: PulseSpacing.sm),
+                Icon(Icons.schedule_rounded, size: 16, color: t.warning),
+              ],
+            ],
+          ),
         ],
       ),
     );
@@ -223,10 +349,8 @@ class _TaskCard extends StatelessWidget {
   }
 }
 
-/// The Add task sheet.
-///
-/// The primary action stays disabled until the title is filled in, and the
-/// validation error is inline.
+/// The sheet can only create a personal reminder. Professor activities arrive
+/// from the school server and cannot be created from the student app.
 class AddTaskSheet extends StatefulWidget {
   const AddTaskSheet({super.key});
 
@@ -252,11 +376,10 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   Widget build(BuildContext context) {
     final t = context.pulse;
     final valid = _title.text.trim().isNotEmpty;
-
     return PulseSheet(
-      title: 'Add task',
-      subtitle: 'Tasks live on your device. They are your own content.',
-      primaryLabel: 'Add task',
+      title: 'Add reminder',
+      subtitle: 'This is private to you and never earns PULSE.',
+      primaryLabel: 'Add reminder',
       primaryEnabled: valid,
       busy: _busy,
       onPrimary: _submit,
@@ -265,8 +388,8 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
         children: [
           PulseTextField(
             controller: _title,
-            label: 'Title',
-            hint: 'What needs doing?',
+            label: 'Reminder',
+            hint: 'What do you want to remember?',
             errorText: _titleError,
             onSubmitted: (_) => _submit(),
           ),
@@ -301,27 +424,23 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   Future<void> _submit() async {
     final title = _title.text.trim();
     if (title.isEmpty) {
-      setState(() => _titleError = 'Give the task a title.');
+      setState(() => _titleError = 'Give the reminder a title.');
       return;
     }
     setState(() {
       _titleError = null;
       _busy = true;
     });
-
-    // The sheet shows its own loading state while it saves.
     await Future<void>.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
-
     Navigator.of(context).pop(
       PulseTask(
         id: 'new',
         title: title,
-        course: _course.text.trim().isEmpty
-            ? 'General'
-            : _course.text.trim(),
+        course: _course.text.trim().isEmpty ? 'General' : _course.text.trim(),
         due: DateTime.now().add(const Duration(days: 3)),
         priority: _priority,
+        source: TaskSource.personal,
       ),
     );
   }

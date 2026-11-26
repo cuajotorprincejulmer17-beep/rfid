@@ -72,6 +72,7 @@ class ApiTaskRepository implements TaskRepository {
     due: parseServerTime(j['due']) ?? DateTime.now(),
     priority: _str(j['priority']).isEmpty ? 'medium' : _str(j['priority']),
     completed: j['completed'] == true,
+    source: TaskSource.fromApi(_str(j['kind'])),
   );
 
   @override

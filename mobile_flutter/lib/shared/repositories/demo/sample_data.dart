@@ -93,6 +93,7 @@ final List<PulseTask> sampleTasks = <PulseTask>[
     course: 'PHY 102',
     due: _at(0, 23, 59),
     priority: 'high',
+    source: TaskSource.professor,
   ),
   PulseTask(
     id: 'task-2',
@@ -100,6 +101,7 @@ final List<PulseTask> sampleTasks = <PulseTask>[
     course: 'ENG 201',
     due: _at(1, 18, 0),
     priority: 'medium',
+    source: TaskSource.professor,
   ),
   PulseTask(
     id: 'task-3',
@@ -107,6 +109,7 @@ final List<PulseTask> sampleTasks = <PulseTask>[
     course: 'PHY 102',
     due: _at(2, 12, 0),
     priority: 'high',
+    source: TaskSource.professor,
   ),
   PulseTask(
     id: 'task-4',
@@ -114,6 +117,7 @@ final List<PulseTask> sampleTasks = <PulseTask>[
     course: 'MTH 220',
     due: _at(4, 20, 0),
     priority: 'low',
+    source: TaskSource.personal,
   ),
   PulseTask(
     id: 'task-5',
@@ -122,6 +126,7 @@ final List<PulseTask> sampleTasks = <PulseTask>[
     due: _at(-2, 20, 0),
     priority: 'medium',
     completed: true,
+    source: TaskSource.professor,
   ),
 ];
 

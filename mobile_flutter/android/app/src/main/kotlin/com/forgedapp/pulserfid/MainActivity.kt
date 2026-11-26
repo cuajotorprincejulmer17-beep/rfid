@@ -1,4 +1,4 @@
-package com.pulse.pulse_flutter
+package com.forgedapp.pulserfid
 
 import io.flutter.embedding.android.FlutterActivity
 

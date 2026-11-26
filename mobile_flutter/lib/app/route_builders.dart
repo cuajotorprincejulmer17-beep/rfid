@@ -102,7 +102,6 @@ class _HomeRoute extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final today = ref.watch(todayAttendanceProvider);
-    // The next class within a week, so the card is not empty on weekends.
     final events = ref.watch(scheduleRangeProvider(ScheduleRange.week));
     final tasks = ref.watch(tasksProvider);
     final profile = ref.watch(profileProvider).value;
@@ -110,18 +109,9 @@ class _HomeRoute extends ConsumerWidget {
     final updates = ref.watch(updatesProvider);
 
     final attendance = today.value;
-    final tone = attendance == null
-        ? null
-        : switch (attendance.status) {
-            'complete' => StatusTone.success,
-            'pending' => StatusTone.warning,
-            'incomplete' => StatusTone.danger,
-            _ => StatusTone.neutral,
-          };
-
     final now = DateTime.now();
     final nextEvent = (events.value ?? const <ScheduleEvent>[])
-        .where((e) => e.end.isAfter(now))
+        .where((event) => event.end.isAfter(now))
         .firstOrNull;
     final taskList = tasks.value ?? const [];
     // Signed in: the real inbox. Without a server: the sample updates.
@@ -134,17 +124,19 @@ class _HomeRoute extends ConsumerWidget {
       greeting: (firstName == null || firstName.isEmpty)
           ? 'Welcome back'
           : 'Welcome back, $firstName',
-      attendanceStatus: tone,
-      attendanceLabel: attendance == null
-          ? 'Attendance'
-          : _attendanceHeadline(attendance),
+      rfidState: attendance?.state,
+      lastRfidScan: attendance?.timeOut ?? attendance?.timeIn,
       nextClassTitle: nextEvent?.title,
-      nextClassDetail: nextEvent == null ? null : '${_when(nextEvent.start)} · ${nextEvent.room}',
-      tasksDueToday: taskList
-          .where((t) => !t.completed && DateUtils.isSameDay(t.due, now))
-          .length,
-      taskTitles: taskList
-          .where((t) => !t.completed)
+      nextClassDetail: nextEvent == null
+          ? null
+          : '${formatClock(nextEvent.start)} · ${nextEvent.room}',
+      professorActivityTitles: taskList
+          .where((t) => t.source == TaskSource.professor && !t.completed)
+          .take(3)
+          .map((t) => t.title)
+          .toList(),
+      personalReminderTitles: taskList
+          .where((t) => t.source == TaskSource.personal && !t.completed)
           .take(3)
           .map((t) => t.title)
           .toList(),
@@ -157,18 +149,6 @@ class _HomeRoute extends ConsumerWidget {
         await ref.read(todayAttendanceProvider.future);
       },
     );
-  }
-
-  /// The small line above "Your attendance" on the Home card.
-  static String _attendanceHeadline(AttendanceDay day) {
-    if (day.state == 'in' && day.timeIn != null) {
-      return 'Timed in at ${formatClock(day.timeIn)}';
-    }
-    if (day.state == 'out' && day.timeOut != null) {
-      return 'Timed out at ${formatClock(day.timeOut)}';
-    }
-    if (day.state == 'not_in') return 'Not timed in yet today';
-    return 'Attendance';
   }
 }
 
@@ -897,20 +877,4 @@ Future<void> _guarded(
           .showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
-}
-
-/// `Today 08:00`, `Mon 08:00` or `Oct 31 08:00` for the next-class card.
-String _when(DateTime start) {
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final day = DateTime(start.year, start.month, start.day);
-  final hhmm = '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
-  final diff = day.difference(today).inDays;
-  if (diff == 0) return 'Today $hhmm';
-  if (diff == 1) return 'Tomorrow $hhmm';
-  if (diff < 7) {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return '${days[start.weekday - 1]} $hhmm';
-  }
-  return '${formatShortDate(start)} $hhmm';
 }
