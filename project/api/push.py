@@ -1,24 +1,25 @@
-"""Background worker: creates inbox rows after confirmed taps and delivers Expo push messages.
+"""Background worker: creates inbox rows after confirmed taps and delivers FCM pushes.
 
 Nothing here runs on the /tap request thread except a non-blocking queue append, so a slow
-database, a slow Expo call or an exception can never delay or change the ESP32 response.
+database, a slow Firebase call or an exception can never delay or change the ESP32 response.
+
+Set FIREBASE_SERVICE_ACCOUNT_PATH to the service-account JSON file. It must
+remain outside this repository and must never be put in the Flutter app.
 """
-import json
 import logging
 import os
 import threading
 import time
-import urllib.error
-import urllib.request
+from datetime import timedelta
 
 from .common import connect, now_text
 
 log = logging.getLogger("api.push")
 
-EXPO_SEND_URL = "https://exp.host/--/api/v2/push/send"
-EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
 RETRY_DELAYS = [5, 30, 120, 600]          # seconds between delivery attempts
-RECEIPT_DELAY_MIN = 15                      # Expo asks to wait ~15 min before reading receipts
+# FCM reports invalid registration tokens synchronously during send.  Keep the
+# old worker cadence only because the queue loop still wakes to run the
+# no-op receipt hook below, preserving its established lifecycle.
 RECEIPT_INTERVAL = 300
 
 _jobs = []
@@ -26,6 +27,9 @@ _cv = threading.Condition()
 _pending = 0
 _thread = None
 _start_lock = threading.Lock()
+_firebase_lock = threading.Lock()
+_firebase_app = None
+_firebase_messaging = None
 
 
 class Transient(Exception):
@@ -36,30 +40,65 @@ def push_enabled():
     return os.environ.get("PUSH_ENABLED", "1") != "0"
 
 
-def _post(url, payload):
-    headers = {"Content-Type": "application/json", "Accept": "application/json"}
-    if os.environ.get("EXPO_ACCESS_TOKEN"):
-        headers["Authorization"] = "Bearer " + os.environ["EXPO_ACCESS_TOKEN"]
-    req = urllib.request.Request(url, json.dumps(payload).encode(), headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        if e.code == 429 or e.code >= 500:
-            raise Transient(f"HTTP {e.code}")
-        raise RuntimeError(f"Expo rejected request: HTTP {e.code}")
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        raise Transient(str(e))
+def _firebase():
+    """Initialise the Firebase Admin SDK once, using the private key path."""
+    global _firebase_app, _firebase_messaging
+    with _firebase_lock:
+        if _firebase_messaging is not None:
+            return _firebase_messaging, _firebase_app
+        path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip()
+        if not path or not os.path.isfile(path):
+            raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_PATH is not configured")
+        try:
+            import firebase_admin
+            from firebase_admin import credentials, messaging
+        except ImportError as exc:
+            raise RuntimeError("firebase-admin is not installed; run pip install -r requirements.txt") from exc
+        _firebase_app = firebase_admin.initialize_app(credentials.Certificate(path))
+        _firebase_messaging = messaging
+        return _firebase_messaging, _firebase_app
 
 
 def send_messages(messages):
-    """Return one Expo ticket per message. Tests replace this function."""
-    return _post(EXPO_SEND_URL, messages).get("data", [])
+    """Send one FCM notification per device and return Expo-compatible results.
+
+    Keeping the small result shape lets the existing queue, retry and device
+    invalidation behaviour remain unchanged while the transport becomes FCM.
+    """
+    messaging, app = _firebase()
+    results = []
+    for item in messages:
+        try:
+            android = messaging.AndroidConfig(
+                priority="high" if item["priority"] == "high" else "normal",
+                ttl=timedelta(seconds=int(item["ttl"])),
+                notification=messaging.AndroidNotification(
+                    channel_id="pulse_updates",
+                    sound="default" if item.get("sound") else None,
+                ),
+            )
+            message = messaging.Message(
+                token=item["to"],
+                notification=messaging.Notification(title=item["title"], body=item["body"]),
+                data={str(key): str(value) for key, value in item["data"].items()},
+                android=android,
+            )
+            messaging.send(message, app=app)
+            results.append({"status": "ok"})
+        except Exception as exc:
+            name = type(exc).__name__
+            if name == "UnregisteredError":
+                results.append({"status": "error", "details": {"error": "DeviceNotRegistered"}})
+            elif name in ("UnavailableError", "QuotaExceededError", "InternalError"):
+                results.append({"status": "error", "details": {"error": "MessageRateExceeded"}})
+            else:
+                results.append({"status": "error", "message": str(exc)})
+    return results
 
 
 def get_receipts(ids):
-    """Return {ticket_id: receipt}. Tests replace this function."""
-    return _post(EXPO_RECEIPTS_URL, {"ids": ids}).get("data", {})
+    """FCM returns invalid-device errors during send; it has no Expo receipts."""
+    return {}
 
 
 # ------------------------------------------------------------------ queue

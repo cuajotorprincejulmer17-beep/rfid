@@ -64,10 +64,17 @@ class PulseNotificationService {
   /// The API call intentionally fails silently here: FCM delivery is optional
   /// and must never interrupt sign-in or the rest of the student app.
   Future<void> registerCurrentDevice(ApiClient api) async {
-    _tokenRefreshSubscription ??= _messaging.onRegistered.listen(
-      (installationId) => unawaited(_registerToken(api, installationId)),
-    );
-    await _messaging.register();
+    try {
+      _tokenRefreshSubscription ??= _messaging.onRegistered.listen(
+        (installationId) => unawaited(_registerToken(api, installationId)),
+      );
+      await _messaging.register();
+    } catch (error, stackTrace) {
+      // Push registration is optional and must never surface as an unhandled
+      // error while the student is signing in.
+      debugPrint('PULSE Firebase registration failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   Future<void> _registerToken(ApiClient api, String token) async {
