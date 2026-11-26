@@ -1,65 +1,111 @@
-"""Background worker: creates inbox rows after confirmed taps and delivers Expo push messages.
+"""Background worker for Firebase Cloud Messaging delivery.
 
-Nothing here runs on the /tap request thread except a non-blocking queue append, so a slow
-database, a slow Expo call or an exception can never delay or change the ESP32 response.
+Nothing here runs on the RFID ``/tap`` request thread except a non-blocking
+queue append. A slow Firebase call or delivery error cannot delay or change
+the ESP32 response.
+
+The Firebase service-account JSON file is never stored in this repository.
+Set ``FIREBASE_SERVICE_ACCOUNT_PATH`` to its absolute local/server path.
 """
-import json
 import logging
 import os
 import threading
 import time
-import urllib.error
-import urllib.request
+from datetime import timedelta
 
 from .common import connect, now_text
 
 log = logging.getLogger("api.push")
 
-EXPO_SEND_URL = "https://exp.host/--/api/v2/push/send"
-EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
-RETRY_DELAYS = [5, 30, 120, 600]          # seconds between delivery attempts
-RECEIPT_DELAY_MIN = 15                      # Expo asks to wait ~15 min before reading receipts
-RECEIPT_INTERVAL = 300
+RETRY_DELAYS = [5, 30, 120, 600]  # seconds between delivery attempts
 
 _jobs = []
 _cv = threading.Condition()
 _pending = 0
 _thread = None
 _start_lock = threading.Lock()
+_firebase_lock = threading.Lock()
+_firebase_app = None
+_firebase_messaging = None
 
 
 class Transient(Exception):
-    """Network/5xx/429 problem: worth retrying later."""
+    """Network/rate-limit/server problem that is worth retrying later."""
+
+
+def _service_account_path():
+    value = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip()
+    return os.path.abspath(value) if value else None
 
 
 def push_enabled():
+    """Whether an operator has deliberately disabled device push delivery."""
     return os.environ.get("PUSH_ENABLED", "1") != "0"
 
 
-def _post(url, payload):
-    headers = {"Content-Type": "application/json", "Accept": "application/json"}
-    if os.environ.get("EXPO_ACCESS_TOKEN"):
-        headers["Authorization"] = "Bearer " + os.environ["EXPO_ACCESS_TOKEN"]
-    req = urllib.request.Request(url, json.dumps(payload).encode(), headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        if e.code == 429 or e.code >= 500:
-            raise Transient(f"HTTP {e.code}")
-        raise RuntimeError(f"Expo rejected request: HTTP {e.code}")
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        raise Transient(str(e))
+def _firebase():
+    """Lazily initialise the Firebase Admin SDK once per server process."""
+    global _firebase_app, _firebase_messaging
+    with _firebase_lock:
+        if _firebase_messaging is not None:
+            return _firebase_messaging, _firebase_app
+
+        path = _service_account_path()
+        if not path or not os.path.isfile(path):
+            raise RuntimeError(
+                "FIREBASE_SERVICE_ACCOUNT_PATH is not configured; notifications "
+                "remain in the inbox but cannot be sent to devices"
+            )
+        try:
+            import firebase_admin
+            from firebase_admin import credentials, messaging
+        except ImportError as exc:
+            raise RuntimeError(
+                "firebase-admin is not installed; run pip install -r requirements.txt"
+            ) from exc
+
+        _firebase_app = firebase_admin.initialize_app(credentials.Certificate(path))
+        _firebase_messaging = messaging
+        return _firebase_messaging, _firebase_app
 
 
 def send_messages(messages):
-    """Return one Expo ticket per message. Tests replace this function."""
-    return _post(EXPO_SEND_URL, messages).get("data", [])
+    """Send messages through FCM and return one result dictionary per target.
 
-
-def get_receipts(ids):
-    """Return {ticket_id: receipt}. Tests replace this function."""
-    return _post(EXPO_RECEIPTS_URL, {"ids": ids}).get("data", {})
+    The small result shape keeps retry and invalid-device handling explicit and
+    easy to test without ever needing Firebase credentials in automated tests.
+    """
+    messaging, app = _firebase()
+    results = []
+    for item in messages:
+        try:
+            ttl = int(item.get("ttl", 86400))
+            android = messaging.AndroidConfig(
+                priority="high" if item.get("priority") == "high" else "normal",
+                ttl=timedelta(seconds=ttl),
+                notification=messaging.AndroidNotification(
+                    channel_id=item.get("channel_id", "pulse_updates"),
+                    sound="default" if item.get("sound") else None,
+                ),
+            )
+            message = messaging.Message(
+                token=item["token"],
+                notification=messaging.Notification(
+                    title=item["title"], body=item["body"],
+                ),
+                data={str(k): str(v) for k, v in item["data"].items()},
+                android=android,
+            )
+            messaging.send(message, app=app)
+            results.append({"status": "ok"})
+        except Exception as exc:  # Firebase exposes transport errors by type.
+            results.append({
+                "status": "error",
+                "kind": type(exc).__name__,
+                "code": str(getattr(exc, "code", "")),
+                "message": str(exc),
+            })
+    return results
 
 
 # ------------------------------------------------------------------ queue
@@ -73,7 +119,7 @@ def submit(kind, delay=0.0, attempt=0, **payload):
 
 
 def drain(timeout=10.0):
-    """Block until every queued job (including delayed retries) has run. Used by tests."""
+    """Block until every queued job (including delayed retries) has run."""
     end = time.time() + timeout
     with _cv:
         while _pending > 0:
@@ -95,152 +141,175 @@ def ensure_started():
 
 
 def _requeue_pending():
-    """After a restart, retry pushes that were created but never delivered (last 2 hours)."""
+    """Retry notifications created in the two hours before a server restart."""
     try:
         from .common import later
         with connect() as c:
-            rows = c.execute("SELECT id FROM notifications WHERE push_status = 'pending' AND created_at >= ?",
-                             (later(hours=-2),)).fetchall()
-        for r in rows:
-            submit("push", nid=r["id"])
+            rows = c.execute(
+                "SELECT id FROM notifications WHERE push_status = 'pending' AND created_at >= ?",
+                (later(hours=-2),),
+            ).fetchall()
+        for row in rows:
+            submit("push", nid=row["id"])
     except Exception:
         log.exception("could not requeue pending pushes")
 
 
 def _loop():
     global _pending
-    next_receipts = time.time() + RECEIPT_INTERVAL
     while True:
         job = None
         with _cv:
             now = time.time()
-            due = [j for j in _jobs if j["run_at"] <= now]
+            due = [job for job in _jobs if job["run_at"] <= now]
             if due:
-                job = min(due, key=lambda j: j["run_at"])
+                job = min(due, key=lambda value: value["run_at"])
                 _jobs.remove(job)
             else:
-                nxt = min([j["run_at"] for j in _jobs] + [next_receipts])
-                _cv.wait(timeout=max(0.05, min(nxt - now, 30)))
-        if job:
-            try:
-                _handle(job)
-            except Exception:
-                log.exception("push job %s failed", job.get("kind"))
-            finally:
-                with _cv:
-                    _pending -= 1
-                    _cv.notify_all()
-        if time.time() >= next_receipts:
-            next_receipts = time.time() + RECEIPT_INTERVAL
-            try:
-                check_receipts()
-            except Exception:
-                log.exception("receipt check failed")
+                next_run = min(job["run_at"] for job in _jobs) if _jobs else None
+                _cv.wait(timeout=30 if next_run is None else max(0.05, min(next_run - now, 30)))
+        if job is None:
+            continue
+        try:
+            _handle(job)
+        except Exception:
+            log.exception("push job %s failed", job.get("kind"))
+        finally:
+            with _cv:
+                _pending -= 1
+                _cv.notify_all()
 
 
 def _handle(job):
     from . import notifier
     if job["kind"] == "tap":
-        nid = notifier.process_tap(job["code"], job["user_id"], job.get("log_id"))
-        if nid:
-            _deliver(nid, None, 0)
+        notification_id = notifier.process_tap(
+            job["code"], job["user_id"], job.get("log_id")
+        )
+        if notification_id:
+            _deliver(notification_id, None, 0)
     elif job["kind"] == "push":
         _deliver(job["nid"], job.get("tokens"), job["attempt"])
 
 
 # ------------------------------------------------------------------ delivery
-def _mark(nid, status, bump=False):
+def _mark(notification_id, status, bump=False):
     with connect(write=True) as c:
-        c.execute("UPDATE notifications SET push_status = ?, push_attempts = push_attempts + ? WHERE id = ?",
-                  (status, 1 if bump else 0, nid))
+        c.execute(
+            "UPDATE notifications SET push_status = ?, push_attempts = push_attempts + ? WHERE id = ?",
+            (status, 1 if bump else 0, notification_id),
+        )
 
 
-def _retry(nid, tokens, attempt, reason):
+def _retry(notification_id, tokens, attempt, reason):
     if attempt >= len(RETRY_DELAYS):
-        log.warning("giving up on notification %s: %s", nid, reason)
-        _mark(nid, "failed", bump=True)
+        log.warning("giving up on notification %s: %s", notification_id, reason)
+        _mark(notification_id, "failed", bump=True)
         return
     with connect(write=True) as c:
-        c.execute("UPDATE notifications SET push_attempts = push_attempts + 1 WHERE id = ?", (nid,))
-    submit("push", delay=RETRY_DELAYS[attempt], attempt=attempt + 1, nid=nid, tokens=tokens)
+        c.execute("UPDATE notifications SET push_attempts = push_attempts + 1 WHERE id = ?", (notification_id,))
+    submit(
+        "push",
+        delay=RETRY_DELAYS[attempt],
+        attempt=attempt + 1,
+        nid=notification_id,
+        tokens=tokens,
+    )
 
 
-def _deliver(nid, only_tokens, attempt):
+def _is_unregistered(result):
+    kind = str(result.get("kind", "")).lower()
+    code = str(result.get("code", "")).lower()
+    # Also recognise the old shape so existing test doubles remain useful.
+    details = result.get("details") or {}
+    old_error = str(details.get("error", "")).lower()
+    return (
+        kind == "unregisterederror"
+        or code in {"not_found", "registration-token-not-registered"}
+        or old_error == "devicenotregistered"
+    )
+
+
+def _is_transient(result):
+    kind = str(result.get("kind", "")).lower()
+    code = str(result.get("code", "")).lower()
+    return kind in {"unavailableerror", "quotaexceedederror", "internalerror"} or code in {
+        "unavailable", "resource_exhausted", "internal", "deadline_exceeded",
+    }
+
+
+def _deliver(notification_id, only_tokens, attempt):
     with connect() as c:
-        n = c.execute("SELECT * FROM notifications WHERE id = ?", (nid,)).fetchone()
-        if n is None or n["push_status"] in ("sent", "skipped", "failed"):
+        notification = c.execute(
+            "SELECT * FROM notifications WHERE id = ?", (notification_id,)
+        ).fetchone()
+        if notification is None or notification["push_status"] in ("sent", "skipped", "failed"):
             return
-        prefs = c.execute("SELECT * FROM notification_prefs WHERE user_id = ?", (n["user_id"],)).fetchone()
-        devices = [r["token"] for r in c.execute(
-            "SELECT token FROM push_devices WHERE user_id = ? AND disabled_at IS NULL", (n["user_id"],))]
+        prefs = c.execute(
+            "SELECT * FROM notification_prefs WHERE user_id = ?", (notification["user_id"],)
+        ).fetchone()
+        devices = [
+            row["token"]
+            for row in c.execute(
+                "SELECT token FROM push_devices WHERE user_id = ? AND disabled_at IS NULL "
+                "AND token NOT LIKE 'ExponentPushToken[%]%' AND token NOT LIKE 'ExpoPushToken[%]%'",
+                (notification["user_id"],),
+            )
+        ]
 
-    def pref(key):
+    def preference(key):
         return True if prefs is None else bool(prefs[key])
 
-    allowed = {"attendance": pref("attendance_alerts"), "system": pref("announcements"),
-               "emergency": True}[n["category"]]  # safety notices ignore optional preferences
-    tokens = [t for t in devices if only_tokens is None or t in only_tokens]
+    allowed = {
+        "attendance": preference("attendance_alerts"),
+        "system": preference("announcements"),
+        "emergency": True,
+    }[notification["category"]]
+    tokens = [token for token in devices if only_tokens is None or token in only_tokens]
     if not push_enabled() or not allowed or not tokens:
-        _mark(nid, "skipped")
+        _mark(notification_id, "skipped")
         return
 
-    messages = []
-    for tok in tokens:
-        m = {"to": tok, "title": n["title"], "body": n["body"], "channelId": n["category"],
-             "data": {"notificationId": nid, "category": n["category"]},
-             "priority": "high" if n["category"] != "system" else "default",
-             "ttl": 3600 if n["category"] == "attendance" else 86400}
-        if pref("sound"):
-            m["sound"] = "default"
-        messages.append(m)
+    messages = [
+        {
+            "token": token,
+            "title": notification["title"],
+            "body": notification["body"],
+            "channel_id": "pulse_updates",
+            "data": {"notificationId": notification_id, "category": notification["category"]},
+            "priority": "high" if notification["category"] != "system" else "normal",
+            "ttl": 3600 if notification["category"] == "attendance" else 86400,
+            "sound": preference("sound"),
+        }
+        for token in tokens
+    ]
 
     try:
-        tickets = send_messages(messages)
-    except Transient as e:
-        _retry(nid, tokens, attempt, str(e))
+        results = send_messages(messages)
+    except Transient as exc:
+        _retry(notification_id, tokens, attempt, str(exc))
         return
     except Exception:
-        log.exception("push send failed permanently for notification %s", nid)
-        _mark(nid, "failed", bump=True)
+        log.exception("push send failed permanently for notification %s", notification_id)
+        _mark(notification_id, "failed", bump=True)
         return
 
     ok, retry_tokens = 0, []
     with connect(write=True) as c:
-        for tok, t in zip(tokens, tickets):
-            if t.get("status") == "ok":
+        for token, result in zip(tokens, results):
+            if result.get("status") == "ok":
                 ok += 1
-                if t.get("id"):
-                    c.execute("INSERT OR IGNORE INTO push_tickets (ticket_id, token, notification_id, created_at)"
-                              " VALUES (?, ?, ?, ?)", (t["id"], tok, nid, now_text()))
-                continue
-            err = (t.get("details") or {}).get("error")
-            if err == "DeviceNotRegistered":
-                c.execute("UPDATE push_devices SET disabled_at = ? WHERE token = ?", (now_text(), tok))
-            elif err == "MessageRateExceeded":
-                retry_tokens.append(tok)
+            elif _is_unregistered(result):
+                c.execute("UPDATE push_devices SET disabled_at = ? WHERE token = ?", (now_text(), token))
+            elif _is_transient(result):
+                retry_tokens.append(token)
             else:
-                log.warning("push ticket error for notification %s: %s", nid, t.get("message") or err)
+                log.warning(
+                    "FCM delivery error for notification %s: %s",
+                    notification_id,
+                    result.get("message") or result.get("code") or result.get("kind"),
+                )
     if retry_tokens:
-        _retry(nid, retry_tokens, attempt, "MessageRateExceeded")
+        _retry(notification_id, retry_tokens, attempt, "FCM temporarily unavailable")
     else:
-        _mark(nid, "sent" if ok else "failed", bump=True)
-
-
-def check_receipts():
-    """Second chance to catch DeviceNotRegistered, which Expo reports in receipts."""
-    from .common import later
-    with connect() as c:
-        rows = c.execute("SELECT ticket_id, token FROM push_tickets WHERE checked_at IS NULL AND created_at <= ?"
-                         " LIMIT 500", (later(minutes=-RECEIPT_DELAY_MIN),)).fetchall()
-    if not rows:
-        return
-    receipts = get_receipts([r["ticket_id"] for r in rows])
-    with connect(write=True) as c:
-        for r in rows:
-            rec = receipts.get(r["ticket_id"])
-            if rec is None:
-                continue
-            if rec.get("status") == "error" and (rec.get("details") or {}).get("error") == "DeviceNotRegistered":
-                c.execute("UPDATE push_devices SET disabled_at = ? WHERE token = ?", (now_text(), r["token"]))
-            c.execute("UPDATE push_tickets SET checked_at = ? WHERE ticket_id = ?", (now_text(), r["ticket_id"]))
-        c.execute("DELETE FROM push_tickets WHERE created_at < ?", (later(days=-2),))
+        _mark(notification_id, "sent" if ok else "failed", bump=True)

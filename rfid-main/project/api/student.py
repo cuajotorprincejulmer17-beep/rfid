@@ -8,7 +8,9 @@ import database as db
 from .common import (ApiError, bp, connect, json_body, now_text, require_auth, text_field, to_iso)
 
 PREF_KEYS = ("attendance_alerts", "announcements", "sound", "haptics")
-PUSH_TOKEN = r"(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_\-]{10,100}\]"
+# FCM registration identifiers are opaque and can change format and length.
+# Validation is deliberately structural rather than tied to an implementation.
+PUSH_TOKEN = r"[^\s]{20,4096}"
 
 
 # ------------------------------------------------------------------ helpers
@@ -184,7 +186,7 @@ def attendance_day(day):
 @require_auth
 def register_device():
     d = json_body()
-    token = text_field(d, "token", min_len=20, max_len=140, pattern=PUSH_TOKEN)
+    token = text_field(d, "token", min_len=20, max_len=4096, pattern=PUSH_TOKEN)
     platform = text_field(d, "platform", min_len=3, max_len=7)
     if platform not in ("android", "ios"):
         raise ApiError(400, "invalid_field", "'platform' must be android or ios.")
@@ -204,7 +206,7 @@ def register_device():
 @bp.post("/devices/unregister")
 @require_auth
 def unregister_device():
-    token = text_field(json_body(), "token", min_len=20, max_len=140, pattern=PUSH_TOKEN)
+    token = text_field(json_body(), "token", min_len=20, max_len=4096, pattern=PUSH_TOKEN)
     with connect(write=True) as c:
         c.execute("UPDATE push_devices SET disabled_at = ? WHERE token = ? AND user_id = ?",
                   (now_text(), token, g.user_id))
